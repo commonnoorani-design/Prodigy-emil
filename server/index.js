@@ -63,12 +63,16 @@ app.use((err, _req, res, _next) => {
   res.status(500).json({ error: err.message || 'Unexpected server error' });
 });
 
+// Mint the encryption key now rather than on the first mailbox save, so it
+// exists to be backed up from the moment the server comes up.
+require('./crypto').ensureKey();
+
 const credentials = bootstrap();
 purgeExpiredSessions();
 setInterval(purgeExpiredSessions, 60 * 60 * 1000).unref();
 
 const server = app.listen(config.port, () => {
-  console.log(`${config.brand.name} Mail running on ${config.appUrl}`);
+  console.log(`${config.brand.name} Mail running on ${config.appUrl || `http://localhost:${config.port}`}`);
   if (credentials) {
     console.log('\n──────────────────────────────────────────────');
     console.log(' First-run administrator account created');

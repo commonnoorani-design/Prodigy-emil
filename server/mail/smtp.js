@@ -90,12 +90,16 @@ function photoPathFor(signature) {
   return fs.existsSync(file) ? file : null;
 }
 
-/** Absolute URLs for in-browser preview (no CIDs available there). */
-function previewSources(signature) {
+/**
+ * Absolute URLs for in-browser preview (no CIDs available there).
+ * Pass the request so the origin is right even when APP_URL is unset.
+ */
+function previewSources(signature, req) {
+  const origin = config.originFor(req);
   return {
-    logoSrc: `${config.appUrl}/assets/logo-email.png`,
+    logoSrc: `${origin}/assets/logo-email.png`,
     photoSrc: signature && signature.photo_file
-      ? `${config.appUrl}/uploads/${encodeURIComponent(path.basename(signature.photo_file))}`
+      ? `${origin}/uploads/${encodeURIComponent(path.basename(signature.photo_file))}`
       : '',
   };
 }

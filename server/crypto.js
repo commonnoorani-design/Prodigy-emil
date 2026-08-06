@@ -1,21 +1,38 @@
 'use strict';
 
 const crypto = require('crypto');
+const fs = require('fs');
+const path = require('path');
 const config = require('./config');
 
 let cachedKey = null;
 
+/**
+ * When SECRET_KEY is not configured, mint one on first use and keep it in
+ * data/secret.key (owner-readable only). That way a fresh install encrypts
+ * mailbox passwords under a key unique to that server, with no setup step —
+ * and the key survives restarts, which is what actually matters.
+ */
+function keyFromDisk() {
+  const file = path.join(config.dataDir, 'secret.key');
+  try {
+    const existing = fs.readFileSync(file, 'utf8').trim();
+    if (existing) return existing;
+  } catch {
+    /* not created yet */
+  }
+  const generated = crypto.randomBytes(32).toString('hex');
+  fs.mkdirSync(config.dataDir, { recursive: true });
+  fs.writeFileSync(file, `${generated}\n`, { mode: 0o600 });
+  console.log(`[setup] Generated a new encryption key at ${file} — back this file up.`);
+  return generated;
+}
+
 // Accepts a 64-char hex string, a 44-char base64 string, or any passphrase
-// (hashed to 32 bytes). Fails loudly when nothing is configured so mailbox
-// passwords are never stored under a predictable key.
+// (hashed to 32 bytes).
 function key() {
   if (cachedKey) return cachedKey;
-  const raw = config.secretKey;
-  if (!raw) {
-    throw new Error(
-      'SECRET_KEY is not set. Generate one with: node -e "console.log(require(\'crypto\').randomBytes(32).toString(\'hex\'))"'
-    );
-  }
+  const raw = config.secretKey || keyFromDisk();
   if (/^[0-9a-f]{64}$/i.test(raw)) {
     cachedKey = Buffer.from(raw, 'hex');
   } else if (/^[A-Za-z0-9+/]{43}=$/.test(raw)) {
@@ -55,4 +72,9 @@ function hashToken(token) {
   return crypto.createHash('sha256').update(token).digest('hex');
 }
 
-module.exports = { encrypt, decrypt, randomToken, hashToken };
+/** Resolve (and if needed create) the encryption key ahead of first use. */
+function ensureKey() {
+  key();
+}
+
+module.exports = { encrypt, decrypt, randomToken, hashToken, ensureKey };

@@ -246,7 +246,7 @@ router.post('/send', upload.array('attachments', 10), async (req, res) => {
 /** Render the exact message that would be sent, without sending it. */
 router.post('/preview', (req, res) => {
   const signature = getSignature(req.user.id);
-  const { logoSrc, photoSrc } = smtp.previewSources(signature);
+  const { logoSrc, photoSrc } = smtp.previewSources(signature, req);
   res.json({
     html: templates.renderEmail({
       bodyHtml: smtp.sanitizeCompose(req.body.bodyHtml || ''),

@@ -126,7 +126,7 @@ router.get('/preview', (req, res) => {
   const userId = targetUserId(req);
   if (!userId) return res.status(403).json({ error: 'Not allowed' });
   const signature = getSignature(userId);
-  const { photoSrc } = smtp.previewSources(signature);
+  const { photoSrc } = smtp.previewSources(signature, req);
   res.json({ html: templates.buildSignature(signature, { photoSrc }) });
 });
 
@@ -135,7 +135,7 @@ router.get('/preview-email', (req, res) => {
   const userId = targetUserId(req);
   if (!userId) return res.status(403).json({ error: 'Not allowed' });
   const signature = getSignature(userId);
-  const { logoSrc, photoSrc } = smtp.previewSources(signature);
+  const { logoSrc, photoSrc } = smtp.previewSources(signature, req);
   const sample =
     '<p>Dear Student,</p><p>Thank you for reaching out to Prodigy Educations. This is how your branded message will look to the person receiving it.</p><p>Warm regards,</p>';
   res.json({

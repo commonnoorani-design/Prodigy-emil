@@ -9,16 +9,15 @@ you have a VPS with SSH.
 
 ---
 
-## Before you start — the one required setting
+## Before you start
 
-Generate the key that encrypts stored mailbox passwords:
+Nothing. There is no key to generate and no URL to work out — the app mints its
+own encryption key on first start (kept in `data/secret.key`) and reads its
+public address from the request. Copy `.env.example` to `.env`, set the
+administrator email and password, and that is the whole configuration.
 
-```bash
-node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
-```
-
-Keep the output. It goes into `SECRET_KEY`. **Back it up** — change it later and
-every saved mailbox password becomes unreadable and has to be re-entered.
+Back up `data/secret.key` once it exists. Lose it and every saved mailbox
+password has to be entered again.
 
 ---
 
@@ -42,22 +41,25 @@ every saved mailbox password becomes unreadable and has to be re-entered.
    for the server it runs on. The zip deliberately ships without
    `node_modules` — a copy built on another machine will not load.
 
-4. **Environment variables.** Still in the Node.js panel, add:
+4. **Set the administrator login.** Edit `.env` in the File Manager (or add the
+   same names as environment variables in the Node.js panel):
 
    ```
-   SECRET_KEY      = <the key you generated>
-   APP_URL         = https://mail.prodigyeducations.com
-   SECURE_COOKIES  = true
-   TRUST_PROXY     = true
-   ADMIN_EMAIL     = admin@prodigyeducations.com
-   NODE_ENV        = production
+   ADMIN_EMAIL    = admin@prodigyeducations.com
+   ADMIN_PASSWORD = <the password you want>
    ```
 
-   (`.env.example` lists every option, including the branding fields.)
+   This is a sign-in username, not a mailbox — it does not have to exist on
+   your mail server. It is only read on the very first start, while the user
+   table is still empty. (`.env.example` lists every other option, including
+   the branding fields.)
 
-5. **Start**, then open the URL. The first start creates the administrator
-   account — its password is printed to the application log, visible in the
-   Node.js panel. Sign in and change it straight away.
+5. **Start**, then open the URL and sign in with those credentials.
+
+6. **Once HTTPS works on the domain**, set `SECURE_COOKIES=true` and restart.
+   Do it in that order — with it on, the browser refuses to send the sign-in
+   cookie over plain HTTP, and sign-in silently bounces you back to the
+   login screen.
 
 ---
 
@@ -76,7 +78,7 @@ unzip prodigy-mail.zip
 npm install --omit=dev
 
 cp .env.example .env
-nano .env          # set SECRET_KEY, APP_URL, SECURE_COOKIES=true, TRUST_PROXY=true
+nano .env          # set ADMIN_EMAIL and ADMIN_PASSWORD
 ```
 
 Keep it running with pm2:
@@ -84,7 +86,9 @@ Keep it running with pm2:
 ```bash
 npm install -g pm2
 pm2 start server/index.js --name prodigy-mail
-pm2 logs prodigy-mail --lines 30    # the first-run admin password is in here
+pm2 logs prodigy-mail --lines 30    # confirms it started; also prints a
+                                    # generated admin password if you left
+                                    # ADMIN_PASSWORD blank
 pm2 save && pm2 startup
 ```
 
@@ -108,6 +112,9 @@ server {
 apt-get install -y nginx certbot python3-certbot-nginx
 certbot --nginx -d mail.prodigyeducations.com
 ```
+
+With HTTPS working, set `SECURE_COOKIES=true` in `.env` and `pm2 restart
+prodigy-mail`.
 
 ---
 
@@ -140,7 +147,8 @@ a failure points straight at the setting that is wrong.
 ## After it is live
 
 - **Back up `data/`.** It holds the SQLite database (users, mailbox settings,
-  signatures) and the uploaded profile pictures. Nothing else is stateful.
+  signatures), the uploaded profile pictures, and `secret.key` — the key that
+  decrypts the stored mailbox passwords. Nothing else is stateful.
 - **Updating.** Upload the new files over the old ones, keep `data/` and `.env`
   untouched, run `npm install`, then restart the app.
 - **Locked out?** `node scripts/seed-admin.js admin@prodigyeducations.com "Prodigy Administrator"`

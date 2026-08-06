@@ -49,16 +49,13 @@ cd Prodigy-emil
 npm install
 
 cp .env.example .env
-# REQUIRED — generate the key that encrypts stored mailbox passwords:
-node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
-# paste the result into SECRET_KEY in .env
-
+# set ADMIN_EMAIL and ADMIN_PASSWORD, then:
 npm start
 ```
 
-The first start creates an administrator account and prints its password to the console. Sign in with it and change the password immediately.
+Open the app and sign in with those credentials. `ADMIN_EMAIL` is a sign-in username, not a mailbox — it does not have to exist on your mail server. Leave `ADMIN_PASSWORD` blank instead and the first start generates one and prints it to the console.
 
-> **`SECRET_KEY` is not optional.** It encrypts every mailbox password in the database. Set it once and back it up — changing it makes all stored mailbox passwords unreadable and every mailbox has to be re-entered.
+Nothing else needs configuring. The key that encrypts stored mailbox passwords is generated on first start and kept in `data/secret.key`; back that file up, because losing it means re-entering every mailbox password.
 
 ## Connecting your hosting's mail servers
 
@@ -97,7 +94,7 @@ Everything lives in `.env` (see `.env.example`). Branding — company name, tagl
 
 **Hostinger:** step-by-step instructions are in [DEPLOY-HOSTINGER.md](DEPLOY-HOSTINGER.md).
 
-Anywhere else: run it behind a TLS-terminating reverse proxy and set `APP_URL` to the public HTTPS URL, `SECURE_COOKIES=true` and `TRUST_PROXY=true`.
+Anywhere else: run it behind a TLS-terminating reverse proxy with `TRUST_PROXY=true`, and set `SECURE_COOKIES=true` **once HTTPS is actually working** — until then the browser will not send the sign-in cookie and login appears to fail.
 
 ```nginx
 server {
@@ -112,11 +109,11 @@ server {
 }
 ```
 
-Keep it running with systemd, pm2 or Docker. Back up the `data/` directory — it holds the SQLite database and the uploaded profile pictures.
+Keep it running with systemd, pm2 or Docker. Back up the `data/` directory — it holds the SQLite database, the uploaded profile pictures and the encryption key.
 
 ## Security notes
 
-- Mailbox passwords are encrypted with AES-256-GCM under `SECRET_KEY`; they are never returned to the browser.
+- Mailbox passwords are encrypted with AES-256-GCM under a per-install key (`SECRET_KEY`, or `data/secret.key` when that is unset); they are never returned to the browser.
 - Sign-in passwords are bcrypt hashes. Sign-in is rate limited.
 - Sessions are httpOnly cookies with a server-side record, revoked on password change.
 - Incoming mail is sanitised server-side and rendered in a sandboxed iframe with scripts disabled.

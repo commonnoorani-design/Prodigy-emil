@@ -14,9 +14,10 @@ function bool(value, fallback) {
 const config = {
   root,
   port: Number(process.env.PORT || 3000),
-  // Public base URL of this app. Used to build absolute links for logos /
-  // profile pictures when previewing a message in the browser.
-  appUrl: (process.env.APP_URL || `http://localhost:${process.env.PORT || 3000}`).replace(/\/+$/, ''),
+  // Public base URL of this app, used to build absolute links for logos and
+  // profile pictures when previewing a message in the browser. Leave it unset
+  // and each request's own origin is used instead.
+  appUrl: (process.env.APP_URL || '').replace(/\/+$/, ''),
   dataDir: process.env.DATA_DIR || path.join(root, 'data'),
   uploadDir: process.env.UPLOAD_DIR || path.join(root, 'data', 'uploads'),
   dbFile: process.env.DB_FILE || path.join(root, 'data', 'prodigy-mail.db'),
@@ -53,5 +54,14 @@ const config = {
 };
 
 config.brand.whatsappDigits = config.brand.whatsapp.replace(/[^\d]/g, '');
+
+/** Where this app is reachable, as seen by the request being served. */
+config.originFor = (req) => {
+  if (config.appUrl) return config.appUrl;
+  if (!req) return `http://localhost:${config.port}`;
+  const proto = (config.trustProxy && req.get('x-forwarded-proto')) || req.protocol || 'http';
+  const host = req.get('host');
+  return host ? `${proto.split(',')[0].trim()}://${host}` : `http://localhost:${config.port}`;
+};
 
 module.exports = config;
