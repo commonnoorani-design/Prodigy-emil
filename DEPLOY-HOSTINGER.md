@@ -118,6 +118,44 @@ prodigy-mail`.
 
 ---
 
+## "Request failed (404)" / "The application server is not answering"
+
+The login page appears and looks right, but signing in fails. That means the
+web server is handing out the files in `public/` and nothing is running the
+Node app behind them. Static files exist on disk, `/api/...` does not, so the
+web server returns its own 404.
+
+**Confirm it in one step.** Open this in a browser:
+
+```
+https://your-domain.com/api/health
+```
+
+| What you see | What it means |
+|---|---|
+| `{"ok":true,"brand":"Prodigy Educations"}` | Node is serving. The problem is elsewhere — check the app log. |
+| A 404 page | Nothing but static files. The Node app is not running, or the domain is not pointed at it. |
+| 502 / 503 | The app is proxied but crashed or never started. Check the app log. |
+
+**Fixing it**
+
+1. Is the app actually started? hPanel → **Node.js** → the application should
+   read *Running*, not *Stopped*. Over SSH: `pm2 status`.
+2. Is the startup file `server/index.js`? Not `index.js`, not `app.js`.
+3. Was **Run NPM Install** pressed? Without `node_modules` the app exits
+   immediately on start; the log will say `Cannot find module 'express'`.
+4. Does the domain point at the app rather than at a folder? If the document
+   root is set to the extracted folder (or to its `public/` subfolder), the
+   web server answers directly and the Node app is never consulted. On a VPS
+   this is the nginx `proxy_pass` block above; in hPanel it is the
+   *Application URL* field.
+5. **Does your plan run Node at all?** If hPanel has no **Node.js** section,
+   the plan is PHP-only and cannot host this app however the files are
+   arranged — that needs a VPS. There is no workaround: the app has to hold
+   long-lived IMAP and SMTP connections, which a PHP-only host cannot do.
+
+---
+
 ## Connecting your Hostinger business emails
 
 Sign in as the administrator → **Administration → Business emails → Assign a

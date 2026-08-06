@@ -32,12 +32,31 @@
     }
     const res = await fetch(path, opts);
     const type = res.headers.get('content-type') || '';
-    const data = type.includes('application/json') ? await res.json() : {};
+    const isJson = type.includes('application/json');
+    const data = isJson ? await res.json().catch(() => ({})) : {};
     if (!res.ok) {
       if (res.status === 401 && state.user) location.reload();
+      // Every /api route answers in JSON, including its 404s. Anything else
+      // means the request never reached the Node app — usually the web server
+      // is serving the public/ folder as plain files with nothing behind it.
+      if (!isJson) throw new Error(serverUnreachableMessage(res.status));
       throw new Error(data.error || `Request failed (${res.status})`);
     }
     return data;
+  }
+
+  function serverUnreachableMessage(status) {
+    if (status === 404) {
+      return (
+        'The application server is not answering at this address — only the ' +
+        'static files are being served. Start the Node.js app and point the ' +
+        'domain at it, then check ' + location.origin + '/api/health'
+      );
+    }
+    if (status === 502 || status === 503 || status === 504) {
+      return `The application server is not running (${status}). Start it, then check ${location.origin}/api/health`;
+    }
+    return `The application server returned ${status} instead of a response. Check the app's log.`;
   }
 
   let toastTimer;
