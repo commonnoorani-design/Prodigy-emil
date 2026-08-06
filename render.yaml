@@ -1,0 +1,29 @@
+# Render blueprint — deploy this repository as a web service.
+#
+#   1. Push this repo to GitHub.
+#   2. Render dashboard -> New -> Blueprint -> pick the repo.
+#   3. Set ADMIN_PASSWORD when prompted, then deploy.
+#
+# The disk below is what keeps the database, profile pictures and encryption
+# key across deploys. Without it every redeploy starts from an empty install.
+services:
+  - type: web
+    name: prodigy-mail
+    runtime: docker
+    plan: starter          # starter or above — the free plan has no disk
+    healthCheckPath: /api/health
+    disk:
+      name: prodigy-data
+      mountPath: /app/data
+      sizeGB: 1
+    envVars:
+      - key: ADMIN_EMAIL
+        value: admin@prodigyeducations.com
+      - key: ADMIN_NAME
+        value: Prodigy Administrator
+      - key: ADMIN_PASSWORD
+        sync: false        # entered in the dashboard, never committed
+      - key: TRUST_PROXY
+        value: "true"
+      - key: SECURE_COOKIES
+        value: "true"      # Render terminates HTTPS for you

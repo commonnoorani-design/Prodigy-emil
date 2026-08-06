@@ -156,6 +156,40 @@ https://your-domain.com/api/health
 
 ---
 
+## If your plan cannot run Node at all
+
+Hostinger's shared web hosting runs PHP only. If hPanel has no **Node.js**
+section, no arrangement of these files will work there — the app has to hold
+long-lived IMAP and SMTP connections open, which that kind of plan cannot do.
+
+Three ways forward, cheapest effort first.
+
+**1. A container host, straight from GitHub.** The repository ships a
+`Dockerfile` and a `render.yaml`. On Render: *New → Blueprint → pick the repo →
+set `ADMIN_PASSWORD` → deploy*. You get HTTPS and a URL immediately, and can
+point `mail.prodigyeducations.com` at it with a CNAME. Fly.io and Railway read
+the same `Dockerfile`. Your existing Hostinger plan keeps serving the main
+website, untouched.
+
+**2. A Hostinger VPS.** Same billing account, full control. Follow *Route B*
+above. This is the option that keeps everything under one provider.
+
+**3. Any box with Docker.**
+
+```bash
+docker build -t prodigy-mail .
+docker run -d --name prodigy-mail -p 3000:3000 \
+  -v prodigy-data:/app/data \
+  -e ADMIN_EMAIL=admin@prodigyeducations.com \
+  -e ADMIN_PASSWORD='choose-a-password' \
+  prodigy-mail
+```
+
+Whichever you pick, the `/app/data` volume is the thing to keep — database,
+profile pictures and encryption key all live there.
+
+---
+
 ## Connecting your Hostinger business emails
 
 Sign in as the administrator → **Administration → Business emails → Assign a
