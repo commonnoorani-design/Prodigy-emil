@@ -1,0 +1,148 @@
+<div align="center">
+  <img src="public/assets/logo-web.png" width="140" alt="Prodigy Educations" />
+  <h1>Prodigy Educations — Business Mail</h1>
+  <p>A branded webmail for the team: read and reply to your business inbox in the browser, and send messages that always carry the company header, your personal signature and the Prodigy Educations footer.</p>
+</div>
+
+---
+
+## What it does
+
+- **Read your business inbox in the browser.** Connects to your hosting's IMAP server — folders, unread counts, search, attachments, flag, delete.
+- **Reply, reply-all and forward** with correct threading headers, so conversations stay intact in the recipient's mail client.
+- **Every outgoing message is wrapped in the company template** — logo header linking to the website, the message body, the sender's signature, and the Prodigy Educations footer.
+- **One signature layout for everyone**, filled in per person: profile picture, name, designation, email, phone (with how the number may be used), and a meeting link.
+- **Multiple users with one or more administrators.** Only an administrator assigns business email addresses.
+- **A copy of everything sent is filed in the account's Sent folder** over IMAP, plus an in-app audit log.
+
+## The message template
+
+```
+┌──────────────────────────────────────────────┐
+│  [ LOGO → prodigyeducations.com ]  website   │  header
+├──────────────────────────────────────────────┤
+│  The message you typed                       │  body
+│                                              │
+│  ──────────                                  │
+│  [DP]  Name                                  │  signature
+│        DESIGNATION                           │   (per user,
+│        Prodigy Educations                    │    same layout
+│        Email    you@prodigyeducations.com    │    for everyone)
+│        Phone    +92 … · Call, SMS & WhatsApp │
+│        Meeting  Book a time with me ›        │
+├──────────────────────────────────────────────┤
+│  Prodigy Educations                          │  footer
+│  Support    support@prodigyeducations.com    │   (fixed for
+│  WhatsApp   +92 330 9829829 · WhatsApp only  │    everyone)
+│  Website    prodigyeducations.com            │
+│  Confidentiality notice                      │
+└──────────────────────────────────────────────┘
+```
+
+Signature fields are all optional except the name — leave a field blank and its row simply disappears. The phone row states how the number may be used: **Call, SMS & WhatsApp**, **Call & SMS only**, or **WhatsApp only**. The logo and profile picture are embedded in the message itself, so they still render when a mail client blocks remote images.
+
+## Running it
+
+```bash
+git clone https://github.com/commonnoorani-design/Prodigy-emil.git
+cd Prodigy-emil
+npm install
+
+cp .env.example .env
+# REQUIRED — generate the key that encrypts stored mailbox passwords:
+node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
+# paste the result into SECRET_KEY in .env
+
+npm start
+```
+
+The first start creates an administrator account and prints its password to the console. Sign in with it and change the password immediately.
+
+> **`SECRET_KEY` is not optional.** It encrypts every mailbox password in the database. Set it once and back it up — changing it makes all stored mailbox passwords unreadable and every mailbox has to be re-entered.
+
+## Connecting your hosting's mail servers
+
+Sign in as an administrator → **Administration → Business emails → Assign a business email**.
+
+| Field | Typical value (cPanel / DirectAdmin / Plesk) |
+|---|---|
+| Business email | `name@prodigyeducations.com` |
+| IMAP host | `mail.prodigyeducations.com` |
+| IMAP port | `993` with SSL/TLS (or `143` for STARTTLS) |
+| SMTP host | `mail.prodigyeducations.com` |
+| SMTP port | `465` with SSL/TLS (or `587` for STARTTLS) |
+| Username | usually the full email address |
+| Password | the mailbox password from your hosting panel |
+
+Press **Test connection** before saving — it reports IMAP and SMTP separately, so a failure points straight at the setting that is wrong. Leave **Sent folder** blank and the app finds it automatically; set it explicitly (e.g. `INBOX.Sent`) if your host uses an unusual name.
+
+If your host presents a self-signed certificate, set `IMAP_ALLOW_SELF_SIGNED=1` / `SMTP_ALLOW_SELF_SIGNED=1` — a workaround for a broken certificate, not something to leave on.
+
+## Day-to-day use
+
+**Administrator**
+1. **Administration → Users** — create an account. The password is generated and shown once; share it securely. The user must change it at first sign-in.
+2. **Administration → Business emails** — assign the address that user sends and receives from. A user can hold more than one; one is the default.
+3. **Administration → Sent log** — every message sent through the platform, including failures.
+
+**Everyone**
+1. **My signature** — upload a photo and fill in your details. The live preview shows both the signature card and a full sample message.
+2. **Mailbox** — read, search, reply, forward, attach. The template is applied on send; **Preview** shows exactly what the recipient will get.
+
+## Configuration
+
+Everything lives in `.env` (see `.env.example`). Branding — company name, tagline, website, support address, WhatsApp number, established year, optional postal address, and the brand colours — is read from there, so the header, footer and signatures update everywhere at once.
+
+## Deploying
+
+Run it behind a TLS-terminating reverse proxy and set `APP_URL` to the public HTTPS URL, `SECURE_COOKIES=true` and `TRUST_PROXY=true`.
+
+```nginx
+server {
+  server_name mail.prodigyeducations.com;
+  location / {
+    proxy_pass http://127.0.0.1:3000;
+    proxy_set_header Host $host;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
+    client_max_body_size 25m;
+  }
+}
+```
+
+Keep it running with systemd, pm2 or Docker. Back up the `data/` directory — it holds the SQLite database and the uploaded profile pictures.
+
+## Security notes
+
+- Mailbox passwords are encrypted with AES-256-GCM under `SECRET_KEY`; they are never returned to the browser.
+- Sign-in passwords are bcrypt hashes. Sign-in is rate limited.
+- Sessions are httpOnly cookies with a server-side record, revoked on password change.
+- Incoming mail is sanitised server-side and rendered in a sandboxed iframe with scripts disabled.
+- Anything typed into the composer is sanitised again before it is sent.
+- Profile pictures are only served to signed-in users.
+
+## Project layout
+
+```
+server/
+  index.js            Express app, static hosting, shutdown
+  config.js           environment + branding
+  db.js               SQLite schema and first-run bootstrap
+  crypto.js           AES-256-GCM for stored mailbox passwords
+  auth.js             sessions, password hashing, route guards
+  templates/index.js  header, signature and footer HTML  ← the email template
+  mail/imap.js        pooled IMAP: folders, paging, search, flags, append
+  mail/smtp.js        MIME assembly and delivery
+  mail/mailboxes.js   mailbox records and credential access
+  routes/             auth, admin, signature, mail
+public/               single-page client (no build step)
+scripts/seed-admin.js recover or add an administrator from the CLI
+```
+
+## Recovering administrator access
+
+```bash
+node scripts/seed-admin.js admin@prodigyeducations.com "Prodigy Administrator"
+```
+
+Prints a new password and requires a change at next sign-in.

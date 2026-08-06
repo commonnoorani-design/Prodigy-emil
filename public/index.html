@@ -1,0 +1,400 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Prodigy Educations Mail</title>
+<meta name="description" content="Business email platform for Prodigy Educations." />
+<link rel="icon" href="/assets/logo-web.png" />
+<link rel="stylesheet" href="/styles.css" />
+</head>
+<body>
+
+<!-- ───────────────────────── Sign in ───────────────────────── -->
+<section id="login-view" class="login hidden">
+  <div class="login-card">
+    <img src="/assets/logo-web.png" alt="Prodigy Educations" class="login-logo" />
+    <h1>Business Mail</h1>
+    <p class="login-sub">Sign in to send and read mail from your Prodigy Educations address.</p>
+    <form id="login-form" autocomplete="on">
+      <label for="login-email">Email</label>
+      <input id="login-email" name="email" type="email" required autocomplete="username" placeholder="you@prodigyeducations.com" />
+      <label for="login-password">Password</label>
+      <input id="login-password" name="password" type="password" required autocomplete="current-password" />
+      <div id="login-error" class="form-error hidden"></div>
+      <button type="submit" class="btn btn-primary btn-block">Sign in</button>
+    </form>
+    <div class="login-foot">
+      Need help? <a href="mailto:support@prodigyeducations.com">support@prodigyeducations.com</a>
+    </div>
+  </div>
+</section>
+
+<!-- ───────────────────────── App shell ───────────────────────── -->
+<div id="app-view" class="app hidden">
+  <header class="topbar">
+    <button class="icon-btn only-mobile" id="menu-toggle" aria-label="Menu">☰</button>
+    <a class="brand" href="https://prodigyeducations.com" target="_blank" rel="noopener" title="Visit prodigyeducations.com">
+      <img src="/assets/logo-web.png" alt="Prodigy Educations" />
+      <span class="brand-text">
+        <strong>Prodigy Educations</strong>
+        <small id="brand-site">prodigyeducations.com</small>
+      </span>
+    </a>
+
+    <div class="topbar-mid">
+      <select id="mailbox-select" class="mailbox-select" aria-label="Business email"></select>
+      <div class="search-wrap">
+        <input id="search-input" type="search" placeholder="Search mail…" aria-label="Search mail" />
+      </div>
+    </div>
+
+    <div class="topbar-right">
+      <button class="btn btn-primary" id="compose-btn">✚ Compose</button>
+      <div class="user-menu">
+        <button class="avatar-btn" id="user-btn" aria-haspopup="true">
+          <span id="user-initials">PE</span>
+        </button>
+        <div class="dropdown hidden" id="user-dropdown">
+          <div class="dropdown-head">
+            <div id="dd-name"></div>
+            <small id="dd-email"></small>
+            <span class="pill" id="dd-role"></span>
+          </div>
+          <button data-nav="mail">Mailbox</button>
+          <button data-nav="signature">My signature</button>
+          <button data-nav="admin" id="dd-admin" class="hidden">Administration</button>
+          <button data-nav="account">Change password</button>
+          <button id="logout-btn" class="danger">Sign out</button>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <div class="body">
+    <!-- Folder sidebar -->
+    <aside class="sidebar" id="sidebar">
+      <nav class="nav-main">
+        <button class="nav-item active" data-nav="mail"><span>✉︎</span> Mailbox</button>
+        <button class="nav-item" data-nav="signature"><span>✎</span> My signature</button>
+        <button class="nav-item hidden" data-nav="admin" id="nav-admin"><span>⚙︎</span> Administration</button>
+      </nav>
+      <div class="folder-head">Folders <button id="refresh-folders" class="link-btn" title="Refresh">⟳</button></div>
+      <ul class="folders" id="folder-list"></ul>
+      <div class="sidebar-foot">
+        <div class="sf-title">Prodigy Educations</div>
+        <a href="mailto:support@prodigyeducations.com">support@prodigyeducations.com</a>
+        <a href="https://wa.me/923309829829" target="_blank" rel="noopener">+92 330 9829829 · WhatsApp only</a>
+      </div>
+    </aside>
+
+    <!-- ─── Mail view ─── -->
+    <main class="main" id="view-mail">
+      <section class="list-pane">
+        <div class="list-head">
+          <span id="list-title">Inbox</span>
+          <span class="spacer"></span>
+          <button class="link-btn" id="refresh-list" title="Refresh">⟳</button>
+        </div>
+        <div id="message-list" class="message-list"></div>
+        <div class="pager">
+          <button class="btn btn-ghost" id="prev-page">‹ Newer</button>
+          <span id="page-info">—</span>
+          <button class="btn btn-ghost" id="next-page">Older ›</button>
+        </div>
+      </section>
+
+      <section class="read-pane" id="read-pane">
+        <div class="empty-state" id="read-empty">
+          <img src="/assets/logo-web.png" alt="" />
+          <p>Select a message to read it here.</p>
+        </div>
+        <article class="reader hidden" id="reader">
+          <div class="reader-head">
+            <h2 id="r-subject"></h2>
+            <div class="reader-meta">
+              <div><strong id="r-from"></strong> <span id="r-from-addr" class="muted"></span></div>
+              <div class="muted" id="r-to"></div>
+              <div class="muted" id="r-date"></div>
+            </div>
+            <div class="reader-actions">
+              <button class="btn btn-primary" id="reply-btn">↩ Reply</button>
+              <button class="btn btn-ghost" id="reply-all-btn">↩↩ Reply all</button>
+              <button class="btn btn-ghost" id="forward-btn">↪ Forward</button>
+              <button class="btn btn-ghost" id="flag-btn">☆ Flag</button>
+              <button class="btn btn-ghost danger" id="delete-btn">🗑 Delete</button>
+            </div>
+          </div>
+          <div id="r-attachments" class="attachments hidden"></div>
+          <iframe id="r-body" class="mail-frame" sandbox="allow-popups allow-popups-to-escape-sandbox" title="Message body"></iframe>
+        </article>
+      </section>
+    </main>
+
+    <!-- ─── Signature view ─── -->
+    <main class="main single hidden" id="view-signature">
+      <div class="page">
+        <div class="page-head">
+          <h1>My email signature</h1>
+          <p>The layout is fixed for everyone at Prodigy Educations — fill in your own details below. It is attached automatically to every message you send.</p>
+        </div>
+
+        <div class="split">
+          <form class="card" id="signature-form">
+            <div class="dp-row">
+              <div class="dp-preview"><img id="dp-img" src="/assets/avatar-placeholder.svg" alt="Profile picture" /></div>
+              <div class="dp-actions">
+                <label class="btn btn-ghost" for="dp-input">Upload photo</label>
+                <input id="dp-input" type="file" accept="image/png,image/jpeg,image/webp,image/gif" hidden />
+                <button type="button" class="btn btn-ghost danger" id="dp-remove">Remove</button>
+                <small>Square JPG/PNG works best. Max 8&nbsp;MB.</small>
+              </div>
+            </div>
+
+            <label for="sig-name">Full name <span class="req">*</span></label>
+            <input id="sig-name" required maxlength="80" placeholder="Ayesha Khan" />
+
+            <label for="sig-designation">Designation</label>
+            <input id="sig-designation" maxlength="80" placeholder="Senior Admissions Counsellor" />
+
+            <label for="sig-email">Email <small class="hint">(leave blank to hide)</small></label>
+            <input id="sig-email" type="email" maxlength="120" placeholder="ayesha@prodigyeducations.com" />
+
+            <label for="sig-phone">Phone number <small class="hint">(leave blank to hide)</small></label>
+            <input id="sig-phone" maxlength="40" placeholder="+92 300 1234567" />
+
+            <fieldset class="radio-set" id="phone-type-set">
+              <legend>How can people use this number?</legend>
+              <label><input type="radio" name="phoneType" value="call_sms_whatsapp" checked /> Call, SMS &amp; WhatsApp</label>
+              <label><input type="radio" name="phoneType" value="call_sms" /> Call &amp; SMS only</label>
+              <label><input type="radio" name="phoneType" value="whatsapp" /> WhatsApp only</label>
+            </fieldset>
+
+            <label for="sig-meeting">Meeting link <small class="hint">(Calendly, Google Meet, Zoom — optional)</small></label>
+            <input id="sig-meeting" maxlength="300" placeholder="https://calendly.com/ayesha-prodigy/30min" />
+
+            <div id="sig-error" class="form-error hidden"></div>
+            <div class="row-actions">
+              <button type="submit" class="btn btn-primary">Save signature</button>
+              <span id="sig-saved" class="saved-note hidden">Saved ✓</span>
+            </div>
+          </form>
+
+          <div class="card preview-card">
+            <div class="preview-tabs">
+              <button class="tab active" data-preview="signature">Signature</button>
+              <button class="tab" data-preview="email">Full email</button>
+            </div>
+            <div id="sig-preview" class="sig-preview"></div>
+            <iframe id="email-preview" class="mail-frame hidden" sandbox="" title="Email preview"></iframe>
+          </div>
+        </div>
+      </div>
+    </main>
+
+    <!-- ─── Admin view ─── -->
+    <main class="main single hidden" id="view-admin">
+      <div class="page">
+        <div class="page-head">
+          <h1>Administration</h1>
+          <p>Create staff accounts and assign the business email addresses they may send from.</p>
+        </div>
+
+        <div class="tabs">
+          <button class="tab active" data-tab="users">Users</button>
+          <button class="tab" data-tab="mailboxes">Business emails</button>
+          <button class="tab" data-tab="log">Sent log</button>
+        </div>
+
+        <!-- Users tab -->
+        <section class="tab-panel" data-panel="users">
+          <div class="card">
+            <h2>Add a user</h2>
+            <form id="user-form" class="grid-form">
+              <div><label for="u-name">Full name <span class="req">*</span></label><input id="u-name" required /></div>
+              <div><label for="u-email">Sign-in email <span class="req">*</span></label><input id="u-email" type="email" required placeholder="ayesha@prodigyeducations.com" /></div>
+              <div><label for="u-designation">Designation</label><input id="u-designation" placeholder="Admissions Counsellor" /></div>
+              <div><label for="u-role">Role</label>
+                <select id="u-role"><option value="user">User</option><option value="admin">Administrator</option></select>
+              </div>
+              <div><label for="u-password">Password <small class="hint">(blank = generate)</small></label><input id="u-password" type="text" autocomplete="new-password" /></div>
+              <div class="grid-actions"><button class="btn btn-primary" type="submit">Create user</button></div>
+            </form>
+            <div id="user-form-msg" class="form-note hidden"></div>
+          </div>
+
+          <div class="card">
+            <h2>Users</h2>
+            <div class="table-wrap">
+              <table class="table" id="users-table">
+                <thead><tr><th>Name</th><th>Sign-in email</th><th>Role</th><th>Business emails</th><th>Status</th><th></th></tr></thead>
+                <tbody></tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+
+        <!-- Mailboxes tab -->
+        <section class="tab-panel hidden" data-panel="mailboxes">
+          <div class="card">
+            <h2 id="mailbox-form-title">Assign a business email</h2>
+            <form id="mailbox-form" class="grid-form">
+              <input type="hidden" id="m-id" />
+              <div><label for="m-user">Assign to <span class="req">*</span></label><select id="m-user" required></select></div>
+              <div><label for="m-address">Business email <span class="req">*</span></label><input id="m-address" type="email" required placeholder="ayesha@prodigyeducations.com" /></div>
+              <div><label for="m-display">Sender display name</label><input id="m-display" placeholder="Ayesha Khan · Prodigy Educations" /></div>
+              <div><label for="m-sent">Sent folder <small class="hint">(auto-detect if blank)</small></label><input id="m-sent" placeholder="INBOX.Sent" /></div>
+
+              <div class="grid-span"><h3>IMAP — receiving</h3></div>
+              <div><label for="m-imap-host">IMAP host <span class="req">*</span></label><input id="m-imap-host" required placeholder="mail.prodigyeducations.com" /></div>
+              <div><label for="m-imap-port">IMAP port</label><input id="m-imap-port" type="number" value="993" /></div>
+              <div><label for="m-imap-user">IMAP username</label><input id="m-imap-user" placeholder="defaults to the email address" /></div>
+              <div><label for="m-imap-secure">IMAP encryption</label>
+                <select id="m-imap-secure"><option value="true">SSL/TLS (993)</option><option value="false">STARTTLS / plain (143)</option></select>
+              </div>
+
+              <div class="grid-span"><h3>SMTP — sending</h3></div>
+              <div><label for="m-smtp-host">SMTP host <span class="req">*</span></label><input id="m-smtp-host" required placeholder="mail.prodigyeducations.com" /></div>
+              <div><label for="m-smtp-port">SMTP port</label><input id="m-smtp-port" type="number" value="465" /></div>
+              <div><label for="m-smtp-user">SMTP username</label><input id="m-smtp-user" placeholder="defaults to the email address" /></div>
+              <div><label for="m-smtp-secure">SMTP encryption</label>
+                <select id="m-smtp-secure"><option value="true">SSL/TLS (465)</option><option value="false">STARTTLS (587)</option></select>
+              </div>
+
+              <div class="grid-span"><h3>Password</h3></div>
+              <div><label for="m-imap-password">Mailbox password <span class="req" id="m-pass-req">*</span></label><input id="m-imap-password" type="password" autocomplete="new-password" placeholder="leave blank to keep current" /></div>
+              <div><label for="m-smtp-password">SMTP password <small class="hint">(if different)</small></label><input id="m-smtp-password" type="password" autocomplete="new-password" /></div>
+              <div class="checkbox-cell"><label><input type="checkbox" id="m-default" /> Make this the user's default sending address</label></div>
+
+              <div class="grid-actions">
+                <button class="btn btn-primary" type="submit">Save mailbox</button>
+                <button class="btn btn-ghost" type="button" id="m-test">Test connection</button>
+                <button class="btn btn-ghost" type="button" id="m-reset">Clear form</button>
+              </div>
+            </form>
+            <div id="mailbox-form-msg" class="form-note hidden"></div>
+          </div>
+
+          <div class="card">
+            <h2>Assigned business emails</h2>
+            <div class="table-wrap">
+              <table class="table" id="mailboxes-table">
+                <thead><tr><th>Address</th><th>Owner</th><th>IMAP</th><th>SMTP</th><th>Default</th><th>Last check</th><th></th></tr></thead>
+                <tbody></tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+
+        <!-- Sent log tab -->
+        <section class="tab-panel hidden" data-panel="log">
+          <div class="card">
+            <h2>Recently sent</h2>
+            <div class="table-wrap">
+              <table class="table" id="log-table">
+                <thead><tr><th>When</th><th>User</th><th>To</th><th>Subject</th><th>Status</th></tr></thead>
+                <tbody></tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+      </div>
+    </main>
+
+    <!-- ─── Account view ─── -->
+    <main class="main single hidden" id="view-account">
+      <div class="page narrow">
+        <div class="page-head"><h1>Change password</h1><p>Signing in again will be required on your other devices.</p></div>
+        <form class="card" id="password-form">
+          <label for="p-current">Current password</label>
+          <input id="p-current" type="password" required autocomplete="current-password" />
+          <label for="p-new">New password <small class="hint">(at least 10 characters)</small></label>
+          <input id="p-new" type="password" required minlength="10" autocomplete="new-password" />
+          <label for="p-confirm">Confirm new password</label>
+          <input id="p-confirm" type="password" required minlength="10" autocomplete="new-password" />
+          <div id="p-msg" class="form-note hidden"></div>
+          <div class="row-actions"><button class="btn btn-primary" type="submit">Update password</button></div>
+        </form>
+      </div>
+    </main>
+  </div>
+</div>
+
+<!-- ───────────────────────── Compose ───────────────────────── -->
+<div class="modal hidden" id="compose-modal">
+  <div class="modal-card compose-card">
+    <div class="modal-head">
+      <h2 id="compose-title">New message</h2>
+      <button class="icon-btn" id="compose-close" aria-label="Close">✕</button>
+    </div>
+    <form id="compose-form" class="compose-body">
+      <div class="compose-row">
+        <label for="c-from">From</label>
+        <select id="c-from"></select>
+      </div>
+      <div class="compose-row">
+        <label for="c-to">To</label>
+        <input id="c-to" placeholder="name@example.com, another@example.com" />
+        <button type="button" class="link-btn" id="toggle-cc">Cc/Bcc</button>
+      </div>
+      <div class="compose-row hidden" id="cc-row">
+        <label for="c-cc">Cc</label><input id="c-cc" />
+      </div>
+      <div class="compose-row hidden" id="bcc-row">
+        <label for="c-bcc">Bcc</label><input id="c-bcc" />
+      </div>
+      <div class="compose-row">
+        <label for="c-subject">Subject</label>
+        <input id="c-subject" />
+      </div>
+
+      <div class="editor-toolbar">
+        <button type="button" data-cmd="bold" title="Bold"><b>B</b></button>
+        <button type="button" data-cmd="italic" title="Italic"><i>I</i></button>
+        <button type="button" data-cmd="underline" title="Underline"><u>U</u></button>
+        <span class="tb-sep"></span>
+        <button type="button" data-cmd="insertUnorderedList" title="Bulleted list">• List</button>
+        <button type="button" data-cmd="insertOrderedList" title="Numbered list">1. List</button>
+        <span class="tb-sep"></span>
+        <button type="button" id="tb-link" title="Insert link">🔗 Link</button>
+        <button type="button" data-cmd="removeFormat" title="Clear formatting">⌫ Clear</button>
+        <span class="spacer"></span>
+        <span class="tb-note">Header, your signature and the company footer are added automatically.</span>
+      </div>
+      <div id="c-body" class="editor" contenteditable="true" role="textbox" aria-multiline="true"></div>
+
+      <div id="c-quoted-wrap" class="quoted-wrap hidden">
+        <button type="button" class="link-btn" id="toggle-quote">Show quoted message</button>
+        <div id="c-quoted" class="quoted hidden"></div>
+      </div>
+
+      <div class="attach-row">
+        <label class="btn btn-ghost" for="c-files">📎 Attach files</label>
+        <input id="c-files" type="file" multiple hidden />
+        <ul id="attach-list" class="attach-list"></ul>
+      </div>
+
+      <div id="compose-error" class="form-error hidden"></div>
+
+      <div class="compose-actions">
+        <button type="submit" class="btn btn-primary" id="send-btn">Send</button>
+        <button type="button" class="btn btn-ghost" id="preview-btn">Preview</button>
+        <span class="spacer"></span>
+        <button type="button" class="btn btn-ghost" id="compose-discard">Discard</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<div class="modal hidden" id="preview-modal">
+  <div class="modal-card">
+    <div class="modal-head"><h2>Message preview</h2><button class="icon-btn" id="preview-close" aria-label="Close">✕</button></div>
+    <iframe id="preview-frame" class="mail-frame tall" sandbox="" title="Preview"></iframe>
+  </div>
+</div>
+
+<div id="toast" class="toast hidden"></div>
+
+<script src="/app.js"></script>
+</body>
+</html>
