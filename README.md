@@ -95,7 +95,9 @@ Everything lives in `.env` (see `.env.example`). Branding — company name, tagl
 
 ## Deploying
 
-Run it behind a TLS-terminating reverse proxy and set `APP_URL` to the public HTTPS URL, `SECURE_COOKIES=true` and `TRUST_PROXY=true`.
+**Hostinger:** step-by-step instructions are in [DEPLOY-HOSTINGER.md](DEPLOY-HOSTINGER.md).
+
+Anywhere else: run it behind a TLS-terminating reverse proxy and set `APP_URL` to the public HTTPS URL, `SECURE_COOKIES=true` and `TRUST_PROXY=true`.
 
 ```nginx
 server {
