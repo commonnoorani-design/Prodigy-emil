@@ -53,10 +53,12 @@ app.get('/api/health', (_req, res) =>
     build: buildId(),
     adminEmail: config.bootstrapAdminEmail,
     adminPasswordConfigured: Boolean(config.bootstrapAdminPassword),
+    needsSetup: require('./routes/setup').needsSetup(),
     dataDir: config.dataDir,
   })
 );
 
+app.use('/api/setup', require('./routes/setup').router);
 app.use('/api/auth', require('./routes/auth').router);
 app.use('/api/admin', require('./routes/admin'));
 app.use('/api/signature', require('./routes/signature').router);
@@ -92,7 +94,12 @@ const server = app.listen(config.port, () => {
     console.log(' First-run administrator account created');
     console.log(`   Email:    ${credentials.email}`);
     console.log(`   Password: ${credentials.password}`);
-    if (credentials.generated) console.log('   (Change this password after your first sign-in.)');
+    console.log('──────────────────────────────────────────────\n');
+  }
+  if (require('./routes/setup').needsSetup()) {
+    console.log('\n──────────────────────────────────────────────');
+    console.log(' No administrator yet — open the site to create one.');
+    console.log(' Do it now: until you do, the first visitor can claim it.');
     console.log('──────────────────────────────────────────────\n');
   }
   if (adminApplied) {

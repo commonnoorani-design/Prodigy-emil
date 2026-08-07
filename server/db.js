@@ -117,8 +117,12 @@ function bootstrap() {
   const { count } = db.prepare('SELECT COUNT(*) AS count FROM users').get();
   if (count > 0) return null;
 
-  const password =
-    config.bootstrapAdminPassword || require('crypto').randomBytes(9).toString('base64url');
+  // With no password configured there is nowhere to deliver a generated one —
+  // it would only land in a deployment log. Leave the instance empty instead
+  // and let the setup screen take the first administrator's details.
+  if (!config.bootstrapAdminPassword) return null;
+
+  const password = config.bootstrapAdminPassword;
   const info = db
     .prepare(
       `INSERT INTO users (login_email, password_hash, name, role, must_change_password)
@@ -128,7 +132,7 @@ function bootstrap() {
       config.bootstrapAdminEmail.toLowerCase(),
       bcrypt.hashSync(password, 12),
       config.bootstrapAdminName,
-      config.bootstrapAdminPassword ? 0 : 1
+      0
     );
 
   db.prepare('INSERT INTO signatures (user_id, full_name, designation) VALUES (?, ?, ?)').run(
@@ -137,7 +141,8 @@ function bootstrap() {
     'Administrator'
   );
 
-  return { email: config.bootstrapAdminEmail, password, generated: !config.bootstrapAdminPassword };
+  setSetting('admin_env_password', bcrypt.hashSync(password, 12));
+  return { email: config.bootstrapAdminEmail, password };
 }
 
 /**

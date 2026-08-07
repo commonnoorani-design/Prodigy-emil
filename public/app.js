@@ -97,14 +97,30 @@
       state.mailboxId = (state.mailboxes.find((m) => m.is_default) || state.mailboxes[0] || {}).id || null;
       showApp();
     } catch {
+      // A brand-new installation has no accounts at all — offer to create the
+      // first one rather than a sign-in form nobody has credentials for.
+      try {
+        const { needsSetup } = await api('/api/setup/status');
+        if (needsSetup) return showSetup();
+      } catch {
+        /* older build or unreachable — fall through to the sign-in form */
+      }
       showLogin();
     }
   }
 
   function showLogin() {
+    $('#setup-view').classList.add('hidden');
     $('#login-view').classList.remove('hidden');
     $('#app-view').classList.add('hidden');
     $('#login-email').focus();
+  }
+
+  function showSetup() {
+    $('#login-view').classList.add('hidden');
+    $('#app-view').classList.add('hidden');
+    $('#setup-view').classList.remove('hidden');
+    $('#setup-name').focus();
   }
 
   function showApp() {
@@ -157,6 +173,32 @@
       });
       $('#login-password').value = '';
       await boot();
+    } catch (ex) {
+      err.textContent = ex.message;
+      err.classList.remove('hidden');
+    }
+  });
+
+  $('#setup-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const err = $('#setup-error');
+    err.classList.add('hidden');
+    if ($('#setup-password').value !== $('#setup-confirm').value) {
+      err.textContent = 'The two passwords do not match.';
+      err.classList.remove('hidden');
+      return;
+    }
+    try {
+      await api('/api/setup', {
+        method: 'POST',
+        body: {
+          name: $('#setup-name').value,
+          email: $('#setup-email').value,
+          password: $('#setup-password').value,
+        },
+      });
+      await boot();
+      toast('Administrator created — you are signed in.', 'success');
     } catch (ex) {
       err.textContent = ex.message;
       err.classList.remove('hidden');

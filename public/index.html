@@ -30,6 +30,30 @@
   </div>
 </section>
 
+<!-- ─────────────────── First-run setup ─────────────────── -->
+<section id="setup-view" class="login hidden">
+  <div class="login-card">
+    <img src="/assets/logo-web.png" alt="Prodigy Educations" class="login-logo" />
+    <h1>Create your administrator</h1>
+    <p class="login-sub">This is a brand-new installation. Set up the first account to take control of it.</p>
+    <form id="setup-form" autocomplete="on">
+      <label for="setup-name">Your full name</label>
+      <input id="setup-name" required maxlength="80" placeholder="Bilal Noorani" autocomplete="name" />
+      <label for="setup-email">Sign-in email</label>
+      <input id="setup-email" type="email" required placeholder="admin@prodigyeducations.com" autocomplete="username" />
+      <label for="setup-password">Password <small class="hint">(at least 10 characters)</small></label>
+      <input id="setup-password" type="password" required minlength="10" autocomplete="new-password" />
+      <label for="setup-confirm">Confirm password</label>
+      <input id="setup-confirm" type="password" required minlength="10" autocomplete="new-password" />
+      <div id="setup-error" class="form-error hidden"></div>
+      <button type="submit" class="btn btn-primary btn-block">Create administrator</button>
+    </form>
+    <div class="login-foot">
+      Do this now — until it is done, anyone who opens this address could claim the account.
+    </div>
+  </div>
+</section>
+
 <!-- ───────────────────────── App shell ───────────────────────── -->
 <div id="app-view" class="app hidden">
   <header class="topbar">
