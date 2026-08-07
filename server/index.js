@@ -5,7 +5,7 @@ const express = require('express');
 const cookieParser = require('cookie-parser');
 
 const config = require('./config');
-const { db, bootstrap, purgeExpiredSessions } = require('./db');
+const { db, bootstrap, applyAdminPasswordFromEnv, purgeExpiredSessions } = require('./db');
 const authMw = require('./auth');
 const imap = require('./mail/imap');
 
@@ -68,6 +68,7 @@ app.use((err, _req, res, _next) => {
 require('./crypto').ensureKey();
 
 const credentials = bootstrap();
+const adminApplied = credentials ? null : applyAdminPasswordFromEnv();
 purgeExpiredSessions();
 setInterval(purgeExpiredSessions, 60 * 60 * 1000).unref();
 
@@ -79,6 +80,17 @@ const server = app.listen(config.port, () => {
     console.log(`   Email:    ${credentials.email}`);
     console.log(`   Password: ${credentials.password}`);
     if (credentials.generated) console.log('   (Change this password after your first sign-in.)');
+    console.log('──────────────────────────────────────────────\n');
+  }
+  if (adminApplied) {
+    console.log('\n──────────────────────────────────────────────');
+    console.log(
+      adminApplied.action === 'created'
+        ? ' Administrator created from ADMIN_EMAIL / ADMIN_PASSWORD'
+        : ' Administrator password reset from ADMIN_PASSWORD'
+    );
+    console.log(`   Email: ${adminApplied.email}`);
+    console.log('   Sign in with the password set in your environment.');
     console.log('──────────────────────────────────────────────\n');
   }
 });

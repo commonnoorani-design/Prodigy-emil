@@ -92,7 +92,23 @@ CREATE TABLE IF NOT EXISTS sent_log (
   created_at  TEXT NOT NULL DEFAULT (datetime('now'))
 );
 CREATE INDEX IF NOT EXISTS idx_sent_log_user ON sent_log(user_id, created_at DESC);
+
+CREATE TABLE IF NOT EXISTS settings (
+  key   TEXT PRIMARY KEY,
+  value TEXT NOT NULL
+);
 `);
+
+function getSetting(key) {
+  const row = db.prepare('SELECT value FROM settings WHERE key = ?').get(key);
+  return row ? row.value : null;
+}
+
+function setSetting(key, value) {
+  db.prepare(
+    'INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value'
+  ).run(key, value);
+}
 
 // ---------------------------------------------------------------------------
 // First-run bootstrap: make sure exactly one administrator exists.
@@ -124,8 +140,58 @@ function bootstrap() {
   return { email: config.bootstrapAdminEmail, password, generated: !config.bootstrapAdminPassword };
 }
 
+/**
+ * Make ADMIN_EMAIL / ADMIN_PASSWORD usable as a recovery route.
+ *
+ * bootstrap() only fires when the database is empty, which is no help on a
+ * hosted deploy: the first start generates a password into a log nobody kept,
+ * and there is no shell to run the seed script from. So whenever the
+ * configured password is one that has not been applied yet, apply it — create
+ * the administrator if missing, reset it if present.
+ *
+ * The applied value is remembered as a bcrypt hash, so restarting with the
+ * same setting is a no-op and a password changed inside the app is left alone.
+ * Changing the variable is what triggers a reset.
+ */
+function applyAdminPasswordFromEnv() {
+  const password = config.bootstrapAdminPassword;
+  if (!password) return null;
+
+  const email = config.bootstrapAdminEmail.toLowerCase();
+  const marker = getSetting('admin_env_password');
+  const existing = db.prepare('SELECT id FROM users WHERE login_email = ?').get(email);
+
+  if (existing && marker && bcrypt.compareSync(password, marker)) return null; // already applied
+
+  const hash = bcrypt.hashSync(password, 12);
+  let action;
+  if (existing) {
+    db.prepare(
+      `UPDATE users SET password_hash = ?, role = 'admin', is_active = 1,
+         must_change_password = 0, updated_at = datetime('now')
+       WHERE id = ?`
+    ).run(hash, existing.id);
+    db.prepare('DELETE FROM sessions WHERE user_id = ?').run(existing.id);
+    action = 'reset';
+  } else {
+    const info = db
+      .prepare(
+        `INSERT INTO users (login_email, password_hash, name, role, must_change_password)
+         VALUES (?, ?, ?, 'admin', 0)`
+      )
+      .run(email, hash, config.bootstrapAdminName);
+    db.prepare(
+      'INSERT OR IGNORE INTO signatures (user_id, full_name, designation) VALUES (?, ?, ?)'
+    ).run(info.lastInsertRowid, config.bootstrapAdminName, 'Administrator');
+    action = 'created';
+  }
+
+  setSetting('admin_env_password', bcrypt.hashSync(password, 12));
+  return { email, action };
+}
+
 function purgeExpiredSessions() {
   db.prepare("DELETE FROM sessions WHERE expires_at < datetime('now')").run();
 }
 
-module.exports = { db, bootstrap, purgeExpiredSessions };
+module.exports = { db, bootstrap, applyAdminPasswordFromEnv, purgeExpiredSessions };

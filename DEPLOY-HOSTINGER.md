@@ -119,6 +119,37 @@ prodigy-mail`.
 
 ---
 
+## "Incorrect email or password" on a fresh deploy
+
+This means the app is running correctly — that message comes from the app
+itself, not the web server. It only means the administrator account does not
+have the password you are typing.
+
+It happens when the app is deployed from GitHub: `.env` is deliberately not in
+the repository, so `ADMIN_PASSWORD` was never supplied. The first start
+generated one instead and printed it to the deployment log.
+
+**Fix it from the panel, no shell needed.** Set these environment variables and
+redeploy:
+
+```
+ADMIN_EMAIL     admin@prodigyeducations.com
+ADMIN_PASSWORD  <the password you want>
+```
+
+On the next start the app applies that password to the administrator account —
+creating it if missing, resetting it if present — and says so in the log:
+
+```
+ Administrator password reset from ADMIN_PASSWORD
+```
+
+Restarting again with the same value changes nothing, and a password you later
+change inside the app is left alone. Changing the variable is what triggers a
+reset, so it doubles as the recovery route if you are ever locked out.
+
+---
+
 ## "Request failed (404)" / "The application server is not answering"
 
 The login page appears and looks right, but signing in fails. That means the
