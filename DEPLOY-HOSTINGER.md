@@ -1,65 +1,66 @@
 # Deploying to Hostinger
 
-This app is a Node.js server, not static PHP files. It needs a Node runtime that
-stays running — a **Hostinger VPS** (or any plan whose hPanel has a **Node.js**
-section). Hostinger's plain shared web hosting only runs PHP and cannot host it.
+Hostinger runs Node.js apps on **Business Web Hosting** and the **Cloud** plans
+(Startup, Professional, Enterprise). It is not a VPS-only feature — those plans
+have a *Deploy Web App* flow that builds and runs the app for you.
 
-Two routes below. Pick **A** if your hPanel has a Node.js app manager, **B** if
-you have a VPS with SSH.
+**Premium Web Hosting does not include it.** If that is your plan, upgrading to
+Business is the cheapest route; nothing else about your existing websites
+changes.
 
----
-
-## Before you start
-
-Nothing. There is no key to generate and no URL to work out — the app mints its
-own encryption key on first start (kept in `data/secret.key`) and reads its
-public address from the request. Copy `.env.example` to `.env`, set the
-administrator email and password, and that is the whole configuration.
-
-Back up `data/secret.key` once it exists. Lose it and every saved mailbox
-password has to be entered again.
+Route **A** below is the shared-hosting flow. Route **B** is a VPS, for when you
+want full control.
 
 ---
 
-## Route A — hPanel Node.js app manager
+## Route A — Business / Cloud plan, via *Deploy Web App*
 
-1. **Upload.** hPanel → **Files → File Manager**, go to your app folder, upload
-   `prodigy-mail.zip` and extract it there. Do *not* put it in `public_html` if
-   that folder is served as static files.
+This is not under "Node.js" in the sidebar, which is why it is easy to miss.
 
-2. **Create the app.** hPanel → **Node.js** → *Create application*:
+1. **hPanel → Websites → Add Website → Deploy Web App.**
+
+2. **Choose how to supply the code.**
+   - *GitHub* — connect `commonnoorani-design/Prodigy-emil` and pick the branch.
+     Every push redeploys.
+   - *Upload* — upload `prodigy-mail.zip`. Hostinger keeps the ZIP for later
+     redeployments.
+
+3. **Framework:** the app is a plain Express server with no build step, so pick
+   **Other**.
 
    | Setting | Value |
    |---|---|
+   | Framework | Other |
+   | Entry file | `server/index.js` |
+   | Output directory | leave empty — there is nothing to build |
    | Node.js version | 20 or newer |
-   | Application root | the folder you extracted into |
-   | Application startup file | `server/index.js` |
-   | Application URL | e.g. `mail.prodigyeducations.com` |
 
-3. **Install dependencies.** Press **Run NPM Install** in that same panel. This
-   step matters: the app uses `better-sqlite3`, which compiles a native binary
-   for the server it runs on. The zip deliberately ships without
-   `node_modules` — a copy built on another machine will not load.
-
-4. **Set the administrator login.** Edit `.env` in the File Manager (or add the
-   same names as environment variables in the Node.js panel):
+4. **Environment variables** — set these in the panel:
 
    ```
-   ADMIN_EMAIL    = admin@prodigyeducations.com
-   ADMIN_PASSWORD = <the password you want>
+   ADMIN_EMAIL    admin@prodigyeducations.com
+   ADMIN_PASSWORD <the password you want>
+   TRUST_PROXY    true
+   SECURE_COOKIES true
+   DATA_DIR       /home/<your-username>/prodigy-data
+   UPLOAD_DIR     /home/<your-username>/prodigy-data/uploads
+   DB_FILE        /home/<your-username>/prodigy-data/prodigy-mail.db
    ```
 
-   This is a sign-in username, not a mailbox — it does not have to exist on
-   your mail server. It is only read on the very first start, while the user
-   table is still empty. (`.env.example` lists every other option, including
-   the branding fields.)
+   Those last three matter. Deployed builds live under
+   `/home/<username>/domains/<domain>/nodejs`, which is replaced on every
+   redeploy. Pointing the data directory outside it keeps the database, the
+   profile pictures and the encryption key across deployments. Without this you
+   would be back to a blank install after each push.
 
-5. **Start**, then open the URL and sign in with those credentials.
+   Do not set `PORT` — Hostinger assigns one and the app already reads it.
 
-6. **Once HTTPS works on the domain**, set `SECURE_COOKIES=true` and restart.
-   Do it in that order — with it on, the browser refuses to send the sign-in
-   cookie over plain HTTP, and sign-in silently bounces you back to the
-   login screen.
+5. **Deploy.** npm install runs automatically; you do not need SSH.
+
+6. **Open the app's URL and sign in** with the email and password from step 4.
+
+7. Confirm it is really running: `https://<your-app-url>/api/health` should
+   return `{"ok":true,"brand":"Prodigy Educations"}`.
 
 ---
 
@@ -149,20 +150,19 @@ https://your-domain.com/api/health
    web server answers directly and the Node app is never consulted. On a VPS
    this is the nginx `proxy_pass` block above; in hPanel it is the
    *Application URL* field.
-5. **Does your plan run Node at all?** If hPanel has no **Node.js** section,
-   the plan is PHP-only and cannot host this app however the files are
-   arranged — that needs a VPS. There is no workaround: the app has to hold
-   long-lived IMAP and SMTP connections, which a PHP-only host cannot do.
+5. **Was the app deployed through *Deploy Web App* at all?** Uploading the ZIP
+   into `public_html` with the File Manager does not run it — the web server
+   just serves the files, and every `/api/...` request 404s. The app has to be
+   created through **hPanel → Websites → Add Website → Deploy Web App**.
+6. **Is your plan Business or Cloud?** Premium Web Hosting has no Node.js
+   support; upgrading to Business adds it.
 
 ---
 
-## If your plan cannot run Node at all
+## If your plan cannot run Node
 
-Hostinger's shared web hosting runs PHP only. If hPanel has no **Node.js**
-section, no arrangement of these files will work there — the app has to hold
-long-lived IMAP and SMTP connections open, which that kind of plan cannot do.
-
-Three ways forward, cheapest effort first.
+Only Premium Web Hosting lacks Node.js support. Upgrading to Business is the
+simplest fix. If you would rather host it elsewhere, these also work.
 
 **1. A container host, straight from GitHub.** The repository ships a
 `Dockerfile` and a `render.yaml`. On Render: *New → Blueprint → pick the repo →
