@@ -8,6 +8,7 @@ const config = require('./config');
 const { db, bootstrap, applyAdminPasswordFromEnv, purgeExpiredSessions } = require('./db');
 const authMw = require('./auth');
 const imap = require('./mail/imap');
+const { buildId } = require('./build');
 
 const app = express();
 
@@ -42,7 +43,19 @@ app.use(
   express.static(config.uploadDir, { dotfiles: 'deny', index: false, maxAge: '1h' })
 );
 
-app.get('/api/health', (_req, res) => res.json({ ok: true, brand: config.brand.name }));
+// Deliberately says which build is live and whether the administrator
+// bootstrap is configured — the two things that cannot otherwise be told
+// apart from outside when a deploy misbehaves. Neither reveals a secret.
+app.get('/api/health', (_req, res) =>
+  res.json({
+    ok: true,
+    brand: config.brand.name,
+    build: buildId(),
+    adminEmail: config.bootstrapAdminEmail,
+    adminPasswordConfigured: Boolean(config.bootstrapAdminPassword),
+    dataDir: config.dataDir,
+  })
+);
 
 app.use('/api/auth', require('./routes/auth').router);
 app.use('/api/admin', require('./routes/admin'));

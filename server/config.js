@@ -11,6 +11,18 @@ function bool(value, fallback) {
   return ['1', 'true', 'yes', 'on'].includes(String(value).toLowerCase());
 }
 
+/**
+ * Values typed into a hosting control panel routinely arrive with stray
+ * whitespace, or wrapped in the quotes someone copied along with them. Taken
+ * literally they produce a password nobody can type, so clean them up.
+ */
+function text(value, fallback = '') {
+  if (value === undefined || value === null) return fallback;
+  let out = String(value).trim();
+  if (out.length >= 2 && /^(".*"|'.*')$/s.test(out)) out = out.slice(1, -1).trim();
+  return out || fallback;
+}
+
 const config = {
   root,
   port: Number(process.env.PORT || 3000),
@@ -30,9 +42,9 @@ const config = {
   trustProxy: bool(process.env.TRUST_PROXY, false),
 
   // First-run administrator. Created automatically when the users table is empty.
-  bootstrapAdminEmail: process.env.ADMIN_EMAIL || 'admin@prodigyeducations.com',
-  bootstrapAdminPassword: process.env.ADMIN_PASSWORD || '',
-  bootstrapAdminName: process.env.ADMIN_NAME || 'Prodigy Administrator',
+  bootstrapAdminEmail: text(process.env.ADMIN_EMAIL, 'admin@prodigyeducations.com').toLowerCase(),
+  bootstrapAdminPassword: text(process.env.ADMIN_PASSWORD),
+  bootstrapAdminName: text(process.env.ADMIN_NAME, 'Prodigy Administrator'),
 
   // Branding — shared by every outgoing message.
   brand: {
