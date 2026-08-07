@@ -1,5 +1,6 @@
 'use strict';
 
+const fs = require('fs');
 const path = require('path');
 const express = require('express');
 const cookieParser = require('cookie-parser');
@@ -64,10 +65,37 @@ app.use('/api/admin', require('./routes/admin'));
 app.use('/api/signature', require('./routes/signature').router);
 app.use('/api/mail', require('./routes/mail'));
 
-app.use(express.static(path.join(config.root, 'public'), { index: 'index.html', maxAge: '5m' }));
+// The page is served through a CDN we do not control, and a cached copy of
+// app.js outliving a deploy means the browser runs last week's code against
+// this week's server. Stamp the build id onto every asset URL so each deploy
+// asks for a URL the cache has never seen, and let the small HTML shell that
+// carries those URLs revalidate every time.
+const INDEX_FILE = path.join(config.root, 'public', 'index.html');
+let indexHtml = null;
+
+function renderIndex() {
+  if (!indexHtml) {
+    const version = buildId();
+    indexHtml = fs
+      .readFileSync(INDEX_FILE, 'utf8')
+      .replace(
+        /(href|src)="\/(app\.js|styles\.css|assets\/[^"?]+)"/g,
+        (_match, attr, file) => `${attr}="/${file}?v=${version}"`
+      );
+  }
+  return indexHtml;
+}
+
+function sendIndex(_req, res) {
+  res.set('Cache-Control', 'no-cache, must-revalidate');
+  res.type('html').send(renderIndex());
+}
+
+app.get('/', sendIndex);
+app.use(express.static(path.join(config.root, 'public'), { index: false, maxAge: '1h' }));
 
 app.use('/api', (_req, res) => res.status(404).json({ error: 'Not found' }));
-app.get(/.*/, (_req, res) => res.sendFile(path.join(config.root, 'public', 'index.html')));
+app.get(/.*/, sendIndex);
 
 // eslint-disable-next-line no-unused-vars
 app.use((err, _req, res, _next) => {
