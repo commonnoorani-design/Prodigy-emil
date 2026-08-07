@@ -79,7 +79,7 @@ If your host presents a self-signed certificate, set `IMAP_ALLOW_SELF_SIGNED=1` 
 
 **Administrator**
 1. **Administration → Users** — create an account. The password is generated and shown once; share it securely. The user must change it at first sign-in.
-2. **Administration → Business emails** — assign the address that user sends and receives from. A user can hold more than one; one is the default.
+2. **Administration → Business emails** — assign the address that user sends and receives from. Tick more than one person to share an address like `info@` or `admissions@` across a team: they all read the same inbox and send as that address, and replies filed in Sent are visible to everyone who holds it. A user can hold several addresses; each person picks their own default sender.
 3. **Administration → Sent log** — every message sent through the platform, including failures.
 
 **Everyone**

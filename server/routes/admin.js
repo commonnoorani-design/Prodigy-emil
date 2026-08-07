@@ -178,20 +178,39 @@ function readMailboxBody(body, { requirePasswords }) {
   };
 }
 
+/**
+ * Who should be able to use this mailbox? Accepts `userIds` (an array, for a
+ * shared address) and still understands a single `userId` from older callers.
+ */
+function readAssignees(body) {
+  const raw = Array.isArray(body.userIds) ? body.userIds : body.userId ? [body.userId] : [];
+  const ids = [...new Set(raw.map(Number).filter((n) => Number.isInteger(n) && n > 0))];
+  if (!ids.length) return { error: 'Choose at least one person who can use this email' };
+
+  const known = db
+    .prepare(`SELECT id FROM users WHERE id IN (${ids.map(() => '?').join(',')})`)
+    .all(...ids)
+    .map((r) => r.id);
+  const missing = ids.filter((id) => !known.includes(id));
+  if (missing.length) return { error: 'One of the selected users no longer exists' };
+
+  return { ids };
+}
+
 router.post('/mailboxes', (req, res) => {
-  const userId = Number(req.body.userId);
-  const owner = db.prepare('SELECT id FROM users WHERE id = ?').get(userId);
-  if (!owner) return bad(res, 'Select the user this mailbox belongs to');
+  const assignees = readAssignees(req.body);
+  if (assignees.error) return bad(res, assignees.error);
 
   const parsed = readMailboxBody(req.body, { requirePasswords: true });
   if (parsed.error) return bad(res, parsed.error);
 
   const taken = db.prepare('SELECT id FROM mailboxes WHERE address = ?').get(parsed.values.address);
-  if (taken) return bad(res, 'That business email is already assigned');
+  if (taken) {
+    return bad(res, 'That business email already exists — edit it to share it with more people');
+  }
 
   const v = parsed.values;
   const tx = db.transaction(() => {
-    if (v.is_default) db.prepare('UPDATE mailboxes SET is_default = 0 WHERE user_id = ?').run(userId);
     const info = db
       .prepare(
         `INSERT INTO mailboxes
@@ -202,23 +221,23 @@ router.post('/mailboxes', (req, res) => {
       )
       .run({
         ...v,
-        user_id: userId,
+        user_id: assignees.ids[0],
         imap_password: encrypt(parsed.imapPassword),
         smtp_password: encrypt(parsed.smtpPassword || parsed.imapPassword),
       });
-    // First mailbox for a user becomes their default automatically.
-    const count = db.prepare('SELECT COUNT(*) AS c FROM mailboxes WHERE user_id = ?').get(userId).c;
-    if (count === 1) db.prepare('UPDATE mailboxes SET is_default = 1 WHERE id = ?').run(info.lastInsertRowid);
     return info.lastInsertRowid;
   });
 
   const id = tx();
+  mailboxStore.setUsers(id, assignees.ids, { makeDefault: Boolean(v.is_default) });
 
-  // Keep the signature's contact email in step with the assigned address.
-  db.prepare(
-    `UPDATE signatures SET email = ?, updated_at = datetime('now')
-     WHERE user_id = ? AND (email IS NULL OR email = '')`
-  ).run(parsed.values.address, userId);
+  // Keep each holder's signature contact email in step, where they have none.
+  for (const userId of assignees.ids) {
+    db.prepare(
+      `UPDATE signatures SET email = ?, updated_at = datetime('now')
+       WHERE user_id = ? AND (email IS NULL OR email = '')`
+    ).run(parsed.values.address, userId);
+  }
 
   res.status(201).json({ id, mailbox: mailboxStore.getPublic(id) });
 });
@@ -232,17 +251,19 @@ router.patch('/mailboxes/:id', (req, res) => {
   if (parsed.error) return bad(res, parsed.error);
 
   const v = parsed.values;
-  const userId = req.body.userId ? Number(req.body.userId) : existing.user_id;
-  if (req.body.userId && !db.prepare('SELECT id FROM users WHERE id = ?').get(userId)) {
-    return bad(res, 'Unknown user');
+  const wantsAssignees = req.body.userIds !== undefined || req.body.userId !== undefined;
+  let assignees = null;
+  if (wantsAssignees) {
+    assignees = readAssignees(req.body);
+    if (assignees.error) return bad(res, assignees.error);
   }
+  const ownerId = assignees ? assignees.ids[0] : existing.user_id;
   if (v.address !== existing.address) {
     const taken = db.prepare('SELECT id FROM mailboxes WHERE address = ? AND id != ?').get(v.address, id);
     if (taken) return bad(res, 'That business email is already assigned');
   }
 
   const tx = db.transaction(() => {
-    if (v.is_default) db.prepare('UPDATE mailboxes SET is_default = 0 WHERE user_id = ?').run(userId);
     db.prepare(
       `UPDATE mailboxes SET user_id = @user_id, address = @address, display_name = @display_name,
         imap_host = @imap_host, imap_port = @imap_port, imap_secure = @imap_secure, imap_user = @imap_user,
@@ -253,7 +274,7 @@ router.patch('/mailboxes/:id', (req, res) => {
     ).run({
       ...v,
       id,
-      user_id: userId,
+      user_id: ownerId,
       is_active: req.body.isActive === undefined ? existing.is_active : req.body.isActive ? 1 : 0,
     });
 
@@ -268,6 +289,9 @@ router.patch('/mailboxes/:id', (req, res) => {
   });
 
   tx();
+  if (assignees) {
+    mailboxStore.setUsers(id, assignees.ids, { makeDefault: Boolean(v.is_default) });
+  }
   res.json({ mailbox: mailboxStore.getPublic(id) });
 });
 

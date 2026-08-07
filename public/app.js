@@ -840,13 +840,29 @@
       adminUsers = users;
       renderUsersTable(users);
       renderMailboxesTable(mailboxes);
-      $('#m-user').innerHTML = users
-        .filter((u) => u.is_active)
-        .map((u) => `<option value="${u.id}">${esc(u.name)} — ${esc(u.login_email)}</option>`)
-        .join('');
+      renderUserPicker(users.filter((u) => u.is_active));
     } catch (err) {
       toast(err.message, 'error');
     }
+  }
+
+  function renderUserPicker(users, selected = []) {
+    const chosen = new Set(selected.map(Number));
+    $('#m-users').innerHTML = users.length
+      ? users
+          .map(
+            (u) => `<label>
+              <input type="checkbox" name="mailboxUser" value="${u.id}" ${chosen.has(u.id) ? 'checked' : ''} />
+              <span>${esc(u.name)}<br><span class="up-mail">${esc(u.login_email)}</span></span>
+              ${u.role === 'admin' ? '<span class="pill up-role">Admin</span>' : ''}
+            </label>`
+          )
+          .join('')
+      : '<div class="up-empty">Create a user first, then assign an email to them.</div>';
+  }
+
+  function selectedUserIds() {
+    return $$('#m-users input[name=mailboxUser]:checked').map((el) => Number(el.value));
   }
 
   function renderUsersTable(users) {
@@ -927,11 +943,18 @@
       ? rows
           .map(
             (m) => `<tr>
-              <td class="mono"><strong>${esc(m.address)}</strong>${m.display_name ? `<br><span class="muted">${esc(m.display_name)}</span>` : ''}</td>
-              <td>${esc(m.user_name)}<br><span class="muted mono">${esc(m.user_login_email)}</span></td>
+              <td class="mono"><strong>${esc(m.address)}</strong>${
+                (m.users || []).length > 1 ? `<span class="shared-pill">Shared × ${m.users.length}</span>` : ''
+              }${m.display_name ? `<br><span class="muted">${esc(m.display_name)}</span>` : ''}</td>
+              <td><div class="who-list">${
+                (m.users || []).length
+                  ? m.users
+                      .map((u) => `<span class="${u.isDefault ? 'is-default' : ''}" title="${esc(u.loginEmail)}${u.isDefault ? ' — their default sender' : ''}">${esc(u.name)}</span>`)
+                      .join('')
+                  : '<span class="muted">nobody yet</span>'
+              }</div></td>
               <td class="mono">${esc(m.imap_host)}:${m.imap_port}</td>
               <td class="mono">${esc(m.smtp_host)}:${m.smtp_port}</td>
-              <td>${m.is_default ? '<span class="pill ok">Default</span>' : ''}</td>
               <td>${m.last_error ? `<span class="pill bad" title="${esc(m.last_error)}">Error</span>` : m.last_checked_at ? `<span class="pill ok">OK</span>` : '<span class="pill off">Untested</span>'}<br><span class="muted">${esc(m.last_checked_at || '')}</span></td>
               <td><div class="actions">
                 <button class="btn btn-ghost" data-mact="test" data-id="${m.id}">Test</button>
@@ -941,7 +964,7 @@
             </tr>`
           )
           .join('')
-      : '<tr><td colspan="7" class="muted" style="padding:20px;text-align:center">No business emails assigned yet.</td></tr>';
+      : '<tr><td colspan="6" class="muted" style="padding:20px;text-align:center">No business emails assigned yet.</td></tr>';
 
     window.__mailboxRows = rows;
     $$('#mailboxes-table [data-mact]').forEach((btn) =>
@@ -952,7 +975,7 @@
   function mailboxFormValues() {
     return {
       id: $('#m-id').value || undefined,
-      userId: $('#m-user').value,
+      userIds: selectedUserIds(),
       address: $('#m-address').value,
       displayName: $('#m-display').value,
       sentFolder: $('#m-sent').value,
@@ -972,6 +995,7 @@
 
   function resetMailboxForm() {
     $('#mailbox-form').reset();
+    $$('#m-users input[name=mailboxUser]').forEach((el) => (el.checked = false));
     $('#m-id').value = '';
     $('#m-imap-port').value = '993';
     $('#m-smtp-port').value = '465';
@@ -987,7 +1011,10 @@
     try {
       if (action === 'edit') {
         $('#m-id').value = row.id;
-        $('#m-user').value = row.user_id;
+        const holders = (row.users || []).map((u) => u.userId);
+        $$('#m-users input[name=mailboxUser]').forEach((el) => {
+          el.checked = holders.includes(Number(el.value));
+        });
         $('#m-address').value = row.address;
         $('#m-display').value = row.display_name || '';
         $('#m-sent').value = row.sent_folder || '';

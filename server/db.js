@@ -97,7 +97,30 @@ CREATE TABLE IF NOT EXISTS settings (
   key   TEXT PRIMARY KEY,
   value TEXT NOT NULL
 );
+
+-- Who may send and read from a mailbox. A shared address such as
+-- info@ or admissions@ has a row here per person, so one mailbox can serve a
+-- whole team. mailboxes.user_id stays as the primary owner, for display;
+-- access is decided here and nowhere else.
+CREATE TABLE IF NOT EXISTS mailbox_access (
+  mailbox_id INTEGER NOT NULL REFERENCES mailboxes(id) ON DELETE CASCADE,
+  user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  is_default INTEGER NOT NULL DEFAULT 0,
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  PRIMARY KEY (mailbox_id, user_id)
+);
+CREATE INDEX IF NOT EXISTS idx_mailbox_access_user ON mailbox_access(user_id);
 `);
+
+// Mailboxes used to belong to exactly one person. Carry those owners over
+// once, so existing installs keep working after the upgrade.
+if (!getSetting('mailbox_access_migrated')) {
+  db.prepare(
+    `INSERT OR IGNORE INTO mailbox_access (mailbox_id, user_id, is_default)
+     SELECT id, user_id, is_default FROM mailboxes`
+  ).run();
+  setSetting('mailbox_access_migrated', '1');
+}
 
 function getSetting(key) {
   const row = db.prepare('SELECT value FROM settings WHERE key = ?').get(key);

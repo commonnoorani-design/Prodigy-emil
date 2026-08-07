@@ -264,7 +264,12 @@
             <h2 id="mailbox-form-title">Assign a business email</h2>
             <form id="mailbox-form" class="grid-form">
               <input type="hidden" id="m-id" />
-              <div><label for="m-user">Assign to <span class="req">*</span></label><select id="m-user" required></select></div>
+              <div class="grid-span">
+                <label>Who can use this email? <span class="req">*</span>
+                  <small class="hint">tick more than one to share an address like info@ across a team</small>
+                </label>
+                <div id="m-users" class="user-picker"></div>
+              </div>
               <div><label for="m-address">Business email <span class="req">*</span></label><input id="m-address" type="email" required placeholder="ayesha@prodigyeducations.com" /></div>
               <div><label for="m-display">Sender display name</label><input id="m-display" placeholder="Ayesha Khan · Prodigy Educations" /></div>
               <div><label for="m-sent">Sent folder <small class="hint">(auto-detect if blank)</small></label><input id="m-sent" placeholder="INBOX.Sent" /></div>
@@ -288,7 +293,7 @@
               <div class="grid-span"><h3>Password</h3></div>
               <div><label for="m-imap-password">Mailbox password <span class="req" id="m-pass-req">*</span></label><input id="m-imap-password" type="password" autocomplete="new-password" placeholder="leave blank to keep current" /></div>
               <div><label for="m-smtp-password">SMTP password <small class="hint">(if different)</small></label><input id="m-smtp-password" type="password" autocomplete="new-password" /></div>
-              <div class="checkbox-cell"><label><input type="checkbox" id="m-default" /> Make this the user's default sending address</label></div>
+              <div class="checkbox-cell"><label><input type="checkbox" id="m-default" /> Make this the default sending address for everyone ticked above</label></div>
 
               <div class="grid-actions">
                 <button class="btn btn-primary" type="submit">Save mailbox</button>
@@ -303,7 +308,7 @@
             <h2>Assigned business emails</h2>
             <div class="table-wrap">
               <table class="table" id="mailboxes-table">
-                <thead><tr><th>Address</th><th>Owner</th><th>IMAP</th><th>SMTP</th><th>Default</th><th>Last check</th><th></th></tr></thead>
+                <thead><tr><th>Address</th><th>Who can use it</th><th>IMAP</th><th>SMTP</th><th>Last check</th><th></th></tr></thead>
                 <tbody></tbody>
               </table>
             </div>
