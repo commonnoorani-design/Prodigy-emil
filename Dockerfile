@@ -16,11 +16,7 @@
 
 FROM node:20-bookworm-slim AS deps
 WORKDIR /app
-# better-sqlite3 uses a prebuilt binary where one exists and compiles where it
-# does not; these are here so the fallback path works too.
-RUN apt-get update \
- && apt-get install -y --no-install-recommends python3 make g++ ca-certificates \
- && rm -rf /var/lib/apt/lists/*
+# No compiler or Python needed: every dependency is pure JavaScript or WASM.
 COPY package.json package-lock.json ./
 RUN npm ci --omit=dev
 

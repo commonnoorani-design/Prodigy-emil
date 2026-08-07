@@ -5,7 +5,7 @@ const express = require('express');
 const cookieParser = require('cookie-parser');
 
 const config = require('./config');
-const { bootstrap, purgeExpiredSessions } = require('./db');
+const { db, bootstrap, purgeExpiredSessions } = require('./db');
 const authMw = require('./auth');
 const imap = require('./mail/imap');
 
@@ -83,8 +83,18 @@ const server = app.listen(config.port, () => {
   }
 });
 
+let shuttingDown = false;
 function shutdown() {
+  if (shuttingDown) return;
+  shuttingDown = true;
   imap.closeAll();
+  // Closing the database releases its write lock. A restart that skipped this
+  // used to leave a lock behind and refuse to start again.
+  try {
+    db.close();
+  } catch {
+    /* already closed */
+  }
   server.close(() => process.exit(0));
   setTimeout(() => process.exit(0), 5000).unref();
 }
