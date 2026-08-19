@@ -165,8 +165,37 @@ recipient and wording each time.
 
 > Draft a reply to Sara about the fee structure — show me a preview before sending.
 
+## Which connection styles the address accepts
+
+`https://email.prodigyeducations.com/mcp` answers to both versions of the
+protocol, so a client picks whichever it speaks:
+
+| The client does | What happens |
+|---|---|
+| `POST` JSON-RPC (Streamable HTTP, 2025-03-26 and later) | answered per request; no session to keep |
+| `GET` with `Accept: text/event-stream` (HTTP+SSE, 2024-11-05) | a stream opens and replies are posted back to `/mcp/messages` |
+
+Both need `Authorization: Bearer …` — a personal token, or one the client
+obtained for itself through the sign-in page. Cross-origin requests are allowed,
+so a client that runs inside a browser can reach it too.
+
 ## If it does not connect
 
 - `curl https://email.prodigyeducations.com/api/health` should return JSON.
 - A rejected token means it was revoked, or copied incompletely — make a new one.
+- "Connection closed" or "unreachable" from a hosted client usually means it
+  never got past the first request. Check it with the two commands below: the
+  first should return a 401 carrying a `WWW-Authenticate` header, the second the
+  tool list.
+
+  ```bash
+  curl -i -X POST https://email.prodigyeducations.com/mcp \
+    -H 'Content-Type: application/json' -d '{}'
+
+  curl -X POST https://email.prodigyeducations.com/mcp \
+    -H "Authorization: Bearer pem_…" \
+    -H 'Content-Type: application/json' \
+    -H 'Accept: application/json, text/event-stream' \
+    -d '{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}'
+  ```
 - The server needs Node 18 or newer.

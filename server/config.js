@@ -5,6 +5,7 @@ require('dotenv').config();
 const path = require('path');
 
 const root = path.resolve(__dirname, '..');
+const dataDir = process.env.DATA_DIR || path.join(root, 'data');
 
 function bool(value, fallback) {
   if (value === undefined || value === '') return fallback;
@@ -30,9 +31,14 @@ const config = {
   // profile pictures when previewing a message in the browser. Leave it unset
   // and each request's own origin is used instead.
   appUrl: (process.env.APP_URL || '').replace(/\/+$/, ''),
-  dataDir: process.env.DATA_DIR || path.join(root, 'data'),
-  uploadDir: process.env.UPLOAD_DIR || path.join(root, 'data', 'uploads'),
-  dbFile: process.env.DB_FILE || path.join(root, 'data', 'prodigy-mail.db'),
+  dataDir,
+  // Both live inside DATA_DIR unless they are pointed somewhere else, so that
+  // moving the data onto permanent storage is one setting rather than three.
+  // Getting that wrong on a host that replaces the application folder on every
+  // deploy costs the database — and with it every session, which reads from
+  // the browser as being signed out the moment you sign in.
+  uploadDir: process.env.UPLOAD_DIR || path.join(dataDir, 'uploads'),
+  dbFile: process.env.DB_FILE || path.join(dataDir, 'prodigy-mail.db'),
 
   // 32-byte key (hex or base64 or plain text) used to encrypt stored mailbox
   // passwords. MUST be set in production.

@@ -50,7 +50,15 @@ router.post('/logout', (req, res) => {
 });
 
 router.get('/me', (req, res) => {
-  if (!req.user) return res.status(401).json({ error: 'Not signed in' });
+  // Say which kind of "not signed in" this is. A browser that never kept the
+  // cookie and a session the server no longer has look identical from the
+  // page, and they call for opposite fixes, so name them apart here.
+  if (!req.user) {
+    return res.status(401).json({
+      error: 'Not signed in',
+      reason: req.sessionToken ? 'unknown_session' : 'no_cookie',
+    });
+  }
   const signature = db.prepare('SELECT * FROM signatures WHERE user_id = ?').get(req.user.id) || null;
   res.json({
     user: publicUser(req.user),

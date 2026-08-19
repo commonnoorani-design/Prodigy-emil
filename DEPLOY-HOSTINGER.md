@@ -150,6 +150,50 @@ reset, so it doubles as the recovery route if you are ever locked out.
 
 ---
 
+## Sign-in is accepted, then you are back on the sign-in page
+
+The password went through — an incorrect one says so — and the very next
+request arrived signed out. The page now names which half broke, and the two
+have different fixes.
+
+**"Your browser did not keep the sign-in cookie."** Nothing reached the server
+to reject. Something in the browser dropped it:
+
+- a private/incognito window, a cookie blocker, or an in-app browser (opening
+  the link from inside WhatsApp is the usual one) — open it in the browser
+  itself;
+- the site opened over `http://` — always use `https://`, the cookie is marked
+  Secure;
+- a device clock that is hours fast. (The cookie is timed with `Max-Age`, which
+  is immune to this, so it only affects builds older than this one.)
+
+**"The server did not recognise the session it had just created."** The session
+was written and then lost, which means the database is not on permanent
+storage. Hostinger replaces the application folder on every deploy, so the data
+has to live outside it:
+
+```
+DATA_DIR  /home/<your-username>/prodigy-data
+```
+
+That one setting is enough — the database and the uploaded photos both live
+inside it unless `DB_FILE` or `UPLOAD_DIR` say otherwise.
+
+**Check the app itself** at `/api/health`:
+
+```json
+{ "build": "…", "instance": "5f3a1c22", "uptimeSeconds": 4210, "sessions": 3, "dbFile": "/home/…/prodigy-data/prodigy-mail.db" }
+```
+
+- `uptimeSeconds` back near zero every time you reload → the app is restarting
+  between requests; the deployment log says why.
+- `instance` changing back and forth between reloads → more than one copy is
+  running behind the CDN, and they do not share sessions.
+- `sessions` not going up after you sign in → the write is not surviving; check
+  `dbFile` points inside `DATA_DIR`.
+
+---
+
 ## "Request failed (404)" / "The application server is not answering"
 
 The login page appears and looks right, but signing in fails. That means the

@@ -35,14 +35,59 @@
     const isJson = type.includes('application/json');
     const data = isJson ? await res.json().catch(() => ({})) : {};
     if (!res.ok) {
-      if (res.status === 401 && state.user) location.reload();
       // Every /api route answers in JSON, including its 404s. Anything else
       // means the request never reached the Node app — usually the web server
       // is serving the public/ folder as plain files with nothing behind it.
-      if (!isJson) throw new Error(serverUnreachableMessage(res.status));
-      throw new Error(data.error || `Request failed (${res.status})`);
+      const error = new Error(
+        isJson ? data.error || `Request failed (${res.status})` : serverUnreachableMessage(res.status)
+      );
+      error.status = res.status;
+      error.reason = data.reason || '';
+      // Losing the session mid-use used to reload the page, which showed the
+      // sign-in form with no word of why — and reloaded again on the next
+      // failure. Say what happened, once.
+      if (res.status === 401 && state.user) endSession(error.reason);
+      throw error;
     }
     return data;
+  }
+
+  /** Is a cookie the page is allowed to read present? */
+  function hasCookie(name) {
+    return document.cookie.split('; ').some((c) => c.startsWith(`${name}=`));
+  }
+
+  // Sign-in sets a second, readable cookie alongside the httpOnly session one.
+  // Between that and the server's own account of the 401, the page can say
+  // which half of the handshake broke instead of silently going back to the
+  // form — the failure a person describes as "it signs me out immediately".
+  function signedOutMessage(reason) {
+    if (reason === 'unknown_session') {
+      return (
+        'The server did not recognise the session it had just created. ' +
+        'That happens when the app restarts without a permanent data folder — ' +
+        'check DATA_DIR in the deployment settings.'
+      );
+    }
+    if (!hasCookie('pe_signed_in')) {
+      return (
+        'Your browser did not keep the sign-in cookie, so the very next ' +
+        'request arrived signed out. Allow cookies for ' + location.host +
+        ' — private browsing, a cookie blocker or an in-app browser will each ' +
+        'do this — then sign in again.'
+      );
+    }
+    return (
+      'The sign-in cookie was set but not sent back. Something between this ' +
+      'browser and the site is stripping it — try another browser or network.'
+    );
+  }
+
+  function endSession(reason) {
+    state.user = null;
+    state.mailboxes = [];
+    state.current = null;
+    showLogin(reason ? signedOutMessage(reason) : 'Your session has ended. Please sign in again.');
   }
 
   function serverUnreachableMessage(status) {
@@ -87,7 +132,7 @@
   const addr = (list) => (list && list.length ? list.map((a) => a.address).filter(Boolean).join(', ') : '');
 
   // ───────────────────────── Session ─────────────────────────
-  async function boot() {
+  async function boot({ justSignedIn = false } = {}) {
     try {
       const data = await api('/api/auth/me');
       state.user = data.user;
@@ -96,7 +141,12 @@
       state.mailboxes = data.mailboxes || [];
       state.mailboxId = (state.mailboxes.find((m) => m.is_default) || state.mailboxes[0] || {}).id || null;
       showApp();
-    } catch {
+    } catch (err) {
+      // A password that was just accepted, followed by a request that arrives
+      // signed out, is not a sign-in problem — it is the session being lost in
+      // between. Never send someone back to the form over that without saying so.
+      if (err.status && err.status !== 401) return showLogin(err.message);
+      if (justSignedIn) return showLogin(signedOutMessage(err.reason));
       // A brand-new installation has no accounts at all — offer to create the
       // first one rather than a sign-in form nobody has credentials for.
       try {
@@ -109,10 +159,13 @@
     }
   }
 
-  function showLogin() {
+  function showLogin(message = '') {
     $('#setup-view').classList.add('hidden');
     $('#login-view').classList.remove('hidden');
     $('#app-view').classList.add('hidden');
+    const err = $('#login-error');
+    err.textContent = message;
+    err.classList.toggle('hidden', !message);
     $('#login-email').focus();
   }
 
@@ -172,7 +225,7 @@
         body: { email: $('#login-email').value, password: $('#login-password').value },
       });
       $('#login-password').value = '';
-      await boot();
+      await boot({ justSignedIn: true });
     } catch (ex) {
       err.textContent = ex.message;
       err.classList.remove('hidden');
@@ -197,7 +250,7 @@
           password: $('#setup-password').value,
         },
       });
-      await boot();
+      await boot({ justSignedIn: true });
       toast('Administrator created — you are signed in.', 'success');
     } catch (ex) {
       err.textContent = ex.message;

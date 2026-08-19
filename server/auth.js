@@ -21,18 +21,28 @@ function destroySession(token) {
   db.prepare('DELETE FROM sessions WHERE token_hash = ?').run(hashToken(token));
 }
 
+// A second cookie carrying nothing but the flag "a session cookie was set".
+// The real one is httpOnly, so when sign-in appears to work and the next
+// request comes back unauthenticated, the page has no way to tell whether the
+// browser refused the cookie or the server forgot the session. This one it can
+// read, which turns that guess into an answer — and it holds no secret, so a
+// script that reads it learns nothing worth knowing.
+const MARKER_COOKIE = 'pe_signed_in';
+
 function setSessionCookie(res, token, expires) {
-  res.cookie(COOKIE, token, {
-    httpOnly: true,
-    sameSite: 'lax',
-    secure: config.secureCookies,
-    expires,
-    path: '/',
-  });
+  // Max-Age, not an absolute Expires: a device whose clock is hours fast reads
+  // an Expires date that has already passed and drops the cookie on the spot,
+  // which looks exactly like being signed out the instant you sign in. Max-Age
+  // counts from the moment the browser receives it, so the clock cannot lie.
+  const maxAge = Math.max(1000, expires.getTime() - Date.now());
+  const options = { sameSite: 'lax', secure: config.secureCookies, maxAge, path: '/' };
+  res.cookie(COOKIE, token, { ...options, httpOnly: true });
+  res.cookie(MARKER_COOKIE, '1', { ...options, httpOnly: false });
 }
 
 function clearSessionCookie(res) {
   res.clearCookie(COOKIE, { path: '/' });
+  res.clearCookie(MARKER_COOKIE, { path: '/' });
 }
 
 const TOKEN_PREFIX = 'pem_';
@@ -119,6 +129,7 @@ function hashPassword(plain) {
 
 module.exports = {
   COOKIE,
+  MARKER_COOKIE,
   createApiToken,
   listApiTokens,
   revokeApiToken,

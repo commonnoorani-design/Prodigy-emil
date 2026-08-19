@@ -44,18 +44,61 @@ app.use(
   express.static(config.uploadDir, { dotfiles: 'deny', index: false, maxAge: '1h' })
 );
 
+// Nothing that answers on /api may be cached: a proxy or browser replaying a
+// stale 401 would sign a person out the moment they signed in, and a replayed
+// 200 would show them somebody else's mail. The same goes for the MCP and
+// OAuth endpoints, which carry per-token answers.
+app.use(['/api', '/mcp', '/oauth', '/.well-known'], (_req, res, next) => {
+  res.set('Cache-Control', 'no-store');
+  next();
+});
+
+// The MCP endpoint and its discovery documents are meant to be called by other
+// people's software, including clients that run in a browser — Gemini Spark
+// among them. Without these headers such a client never gets a reply it is
+// allowed to read, and reports the server as unreachable.
+//
+// Safe as a wildcard precisely because /mcp refuses cookie sessions: it only
+// accepts a bearer token, and `Allow-Origin: *` forbids credentialed requests
+// anyway, so no browser can be tricked into spending its own session here.
+const CORS = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Methods': 'GET, POST, DELETE, OPTIONS',
+  'Access-Control-Allow-Headers':
+    'Authorization, Content-Type, Accept, Mcp-Session-Id, MCP-Protocol-Version, Last-Event-ID',
+  'Access-Control-Expose-Headers': 'WWW-Authenticate, Mcp-Session-Id',
+  'Access-Control-Max-Age': '86400',
+};
+app.use(
+  ['/mcp', '/oauth/register', '/oauth/token', '/.well-known/oauth-protected-resource', '/.well-known/oauth-authorization-server'],
+  (req, res, next) => {
+    res.set(CORS);
+    if (req.method === 'OPTIONS') return res.status(204).end();
+    next();
+  }
+);
+
 // Deliberately says which build is live and whether the administrator
 // bootstrap is configured — the two things that cannot otherwise be told
-// apart from outside when a deploy misbehaves. Neither reveals a secret.
+// apart from outside when a deploy misbehaves. The instance id and uptime are
+// there to answer the next question: whether the app is quietly restarting,
+// or whether more than one copy of it is answering behind the CDN.
+const INSTANCE = require('crypto').randomBytes(4).toString('hex');
+const STARTED_AT = Date.now();
+
 app.get('/api/health', (_req, res) =>
   res.json({
     ok: true,
     brand: config.brand.name,
     build: buildId(),
+    instance: INSTANCE,
+    uptimeSeconds: Math.round((Date.now() - STARTED_AT) / 1000),
+    sessions: db.prepare("SELECT COUNT(*) AS n FROM sessions WHERE expires_at > datetime('now')").get().n,
     adminEmail: config.bootstrapAdminEmail,
     adminPasswordConfigured: Boolean(config.bootstrapAdminPassword),
     needsSetup: require('./routes/setup').needsSetup(),
     dataDir: config.dataDir,
+    dbFile: config.dbFile,
   })
 );
 
@@ -68,7 +111,8 @@ app.get('/.well-known/oauth-protected-resource/mcp', oauth.protectedResource);
 app.get('/.well-known/oauth-authorization-server', oauth.authorizationServer);
 app.get('/.well-known/oauth-authorization-server/mcp', oauth.authorizationServer);
 app.use('/oauth', oauth.router);
-app.use('/mcp', require('./routes/mcp'));
+const mcp = require('./routes/mcp');
+app.use('/mcp', mcp);
 app.use('/api/setup', require('./routes/setup').router);
 app.use('/api/auth', require('./routes/auth').router);
 app.use('/api/admin', require('./routes/admin'));
@@ -158,6 +202,7 @@ function shutdown() {
   if (shuttingDown) return;
   shuttingDown = true;
   imap.closeAll();
+  mcp.closeAll();
   // Closing the database releases its write lock. A restart that skipped this
   // used to leave a lock behind and refuse to start again.
   try {

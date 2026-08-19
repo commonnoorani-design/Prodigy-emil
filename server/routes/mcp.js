@@ -15,6 +15,7 @@
 const express = require('express');
 const { McpServer } = require('@modelcontextprotocol/sdk/server/mcp.js');
 const { StreamableHTTPServerTransport } = require('@modelcontextprotocol/sdk/server/streamableHttp.js');
+const { SSEServerTransport } = require('@modelcontextprotocol/sdk/server/sse.js');
 
 const config = require('../config');
 const { registerTools } = require('../../mcp/tools.cjs');
@@ -53,8 +54,8 @@ function callerFor(authorization) {
   };
 }
 
-router.post('/', express.json({ limit: '4mb' }), async (req, res) => {
-  const authorization = req.get('authorization') || '';
+/** Common gate: this endpoint is for tokens, never for a browser session. */
+function denyUnauthenticated(req, res) {
   if (!req.user) {
     // RFC 9728: point at the metadata so a client that has no token can start
     // the OAuth flow by itself rather than simply failing.
@@ -63,20 +64,31 @@ router.post('/', express.json({ limit: '4mb' }), async (req, res) => {
       'WWW-Authenticate',
       `Bearer realm="Prodigy Educations Mail", resource_metadata="${base}/.well-known/oauth-protected-resource"`
     );
-    return rpcError(
+    rpcError(
       res,
       401,
       'Authorization required. Either connect with OAuth, or send a personal access token as ' +
         '"Authorization: Bearer pem_…" (created in the app under Change password → AI access tokens).'
     );
+    return true;
   }
   if (!req.viaApiToken) {
-    return rpcError(res, 401, 'This endpoint needs an API token, not a browser session.');
+    rpcError(res, 401, 'This endpoint needs an API token, not a browser session.');
+    return true;
   }
+  return false;
+}
 
+function newServer(authorization) {
   const server = new McpServer({ name: 'prodigy-mail', version: '1.0.0' });
   registerTools(server, callerFor(authorization));
+  return server;
+}
 
+router.post('/', express.json({ limit: '4mb' }), async (req, res) => {
+  if (denyUnauthenticated(req, res)) return;
+
+  const server = newServer(req.get('authorization') || '');
   const transport = new StreamableHTTPServerTransport({ sessionIdGenerator: undefined });
   res.on('close', () => {
     transport.close().catch(() => {});
@@ -91,11 +103,82 @@ router.post('/', express.json({ limit: '4mb' }), async (req, res) => {
   }
 });
 
-// Streamable HTTP without sessions has no server-initiated stream to open and
-// nothing to tear down, so say so rather than leaving a client hanging.
+// ---------------------------------------------------------------------------
+// The older HTTP+SSE transport, on the same URL.
+//
+// Plenty of hosted clients still open a connection the 2024-11-05 way: GET the
+// address, keep the stream open, and post replies back to whatever endpoint the
+// first event names. Answering those with 405 is what a client reports as
+// "the server connection is closed and unreachable" — so answer them properly.
+// A current client asking for the optional notification stream sends
+// MCP-Protocol-Version and is told there is nothing to stream, as before.
+// ---------------------------------------------------------------------------
+const legacy = new Map(); // sessionId -> { transport, server, ping }
+const MAX_LEGACY_STREAMS = 20;
+const PING_MS = 25_000;
+
 const notAllowed = (_req, res) =>
   rpcError(res, 405, 'This MCP endpoint is stateless — use POST.');
-router.get('/', notAllowed);
+
+function wantsEventStream(req) {
+  return (req.get('accept') || '').includes('text/event-stream');
+}
+
+function dropLegacy(sessionId) {
+  const entry = legacy.get(sessionId);
+  if (!entry) return;
+  legacy.delete(sessionId);
+  clearInterval(entry.ping);
+  entry.transport.close().catch(() => {});
+  entry.server.close().catch(() => {});
+}
+
+router.get('/', async (req, res) => {
+  if (!wantsEventStream(req) || req.get('mcp-protocol-version')) return notAllowed(req, res);
+  if (denyUnauthenticated(req, res)) return;
+  if (legacy.size >= MAX_LEGACY_STREAMS) {
+    return rpcError(res, 503, 'Too many open connections. Try again in a minute.');
+  }
+
+  const transport = new SSEServerTransport('/mcp/messages', res);
+  const server = newServer(req.get('authorization') || '');
+  // Idle streams are cut by proxies long before a person next asks for mail.
+  // A comment line every 25 seconds is invisible to the client and keeps the
+  // connection counted as alive.
+  const ping = setInterval(() => {
+    try {
+      res.write(': ping\n\n');
+    } catch {
+      dropLegacy(transport.sessionId);
+    }
+  }, PING_MS);
+  ping.unref();
+
+  legacy.set(transport.sessionId, { transport, server, ping });
+  res.on('close', () => dropLegacy(transport.sessionId));
+
+  try {
+    await server.connect(transport);
+  } catch (err) {
+    dropLegacy(transport.sessionId);
+    if (!res.headersSent) rpcError(res, 500, err.message);
+  }
+});
+
+router.post('/messages', express.json({ limit: '4mb' }), async (req, res) => {
+  if (denyUnauthenticated(req, res)) return;
+  const entry = legacy.get(String(req.query.sessionId || ''));
+  if (!entry) return rpcError(res, 404, 'That connection has ended — reconnect and try again.');
+  await entry.transport.handlePostMessage(req, res, req.body);
+});
+
 router.delete('/', notAllowed);
+
+/** Close every open stream, so the process can exit promptly. */
+function closeAll() {
+  for (const sessionId of [...legacy.keys()]) dropLegacy(sessionId);
+}
+
+router.closeAll = closeAll;
 
 module.exports = router;
