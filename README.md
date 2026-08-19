@@ -94,9 +94,11 @@ draft replies and send branded mail as you: [mcp/README.md](mcp/README.md).
 Create a token under **your initials → Change password → AI access tokens**, then
 either:
 
-- **connect by URL** — `https://email.prodigyeducations.com/mcp` with an
-  `Authorization: Bearer pem_…` header. Nothing to install; this is what Gemini
-  CLI and other clients that take an MCP link expect.
+- **paste the link** — `https://email.prodigyeducations.com/mcp`. Clients that
+  sign in for themselves, such as Gemini Spark, register with the server and
+  send you to a consent page; nothing to create or install.
+- **connect by URL with a token** — the same address with an
+  `Authorization: Bearer pem_…` header, which is what Gemini CLI expects.
 - **run it locally** — point a stdio client such as Claude Desktop at
   `mcp/server.js` with `PRODIGY_MAIL_URL` and `PRODIGY_MAIL_TOKEN`.
 

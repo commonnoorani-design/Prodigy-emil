@@ -868,7 +868,9 @@
       box.className = 'form-note';
       box.innerHTML =
         `Copy this now — it is shown once and never again:<br><code>${esc(data.token)}</code>` +
-        `<br><br><strong>Connect by URL</strong> (Gemini CLI and similar): point the client at ` +
+        `<br><br><strong>Gemini Spark</strong> needs no token at all — just paste ` +
+        `<code>${esc(location.origin)}/mcp</code> into Connected Apps and approve.` +
+        `<br><strong>Connect by URL with a token</strong> (Gemini CLI and similar): point the client at ` +
         `<code>${esc(location.origin)}/mcp</code> with the header ` +
         `<code>Authorization: Bearer &lt;the token above&gt;</code>.` +
         `<br><strong>Or locally</strong> (Claude Desktop): run <code>mcp/server.js</code> with ` +

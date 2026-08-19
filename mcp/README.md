@@ -9,7 +9,39 @@ revoke at any time.
 
 ---
 
-## 1. Get a token
+## Gemini Spark — just paste the link
+
+Spark takes a URL and handles sign-in itself, so there is no token to create
+and nothing to install.
+
+1. Go to <https://gemini.google.com> → **Settings & help → Connected Apps**.
+2. Under *Custom apps for Spark*, choose **Add a custom app**.
+3. Paste:
+
+   ```
+   https://email.prodigyeducations.com/mcp
+   ```
+
+4. Follow the prompts. A Prodigy Educations page appears asking you to sign in
+   and approve; do that, and Spark comes back connected.
+
+Leave the *Advanced features* credential boxes empty — the server supports
+Dynamic Client Registration, so Spark registers itself.
+
+The connection then shows up in the app under **Change password → AI access
+tokens** as "Gemini Spark (connected)". Revoking it there disconnects Spark
+immediately.
+
+Custom Spark apps need a personal Google account, not a Workspace one, and can
+only be added from the Gemini website — after which they work in the mobile app
+too.
+
+> Google does not vet custom MCP servers. This one is yours, and it can read and
+> send your business mail, so only connect it from an account you control.
+
+---
+
+## 1. Get a token (for clients that ask for one)
 
 Sign in at <https://email.prodigyeducations.com> → your initials, top right →
 **Change password** → **AI access tokens** → name it, **Create token**.

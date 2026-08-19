@@ -59,6 +59,15 @@ app.get('/api/health', (_req, res) =>
   })
 );
 
+// MCP authorization discovery. A client that gets a 401 from /mcp reads these
+// to find out how to ask for access — which is the only route in for a client
+// that takes a URL and nothing else.
+const oauth = require('./routes/oauth');
+app.get('/.well-known/oauth-protected-resource', oauth.protectedResource);
+app.get('/.well-known/oauth-protected-resource/mcp', oauth.protectedResource);
+app.get('/.well-known/oauth-authorization-server', oauth.authorizationServer);
+app.get('/.well-known/oauth-authorization-server/mcp', oauth.authorizationServer);
+app.use('/oauth', oauth.router);
 app.use('/mcp', require('./routes/mcp'));
 app.use('/api/setup', require('./routes/setup').router);
 app.use('/api/auth', require('./routes/auth').router);

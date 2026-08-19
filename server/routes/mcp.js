@@ -56,11 +56,18 @@ function callerFor(authorization) {
 router.post('/', express.json({ limit: '4mb' }), async (req, res) => {
   const authorization = req.get('authorization') || '';
   if (!req.user) {
-    res.set('WWW-Authenticate', 'Bearer realm="Prodigy Educations Mail"');
+    // RFC 9728: point at the metadata so a client that has no token can start
+    // the OAuth flow by itself rather than simply failing.
+    const base = config.originFor(req);
+    res.set(
+      'WWW-Authenticate',
+      `Bearer realm="Prodigy Educations Mail", resource_metadata="${base}/.well-known/oauth-protected-resource"`
+    );
     return rpcError(
       res,
       401,
-      'Send an access token as "Authorization: Bearer pem_…". Create one in the app under Change password → AI access tokens.'
+      'Authorization required. Either connect with OAuth, or send a personal access token as ' +
+        '"Authorization: Bearer pem_…" (created in the app under Change password → AI access tokens).'
     );
   }
   if (!req.viaApiToken) {

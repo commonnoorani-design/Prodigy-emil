@@ -124,6 +124,28 @@ CREATE TABLE IF NOT EXISTS api_tokens (
   last_used_at TEXT
 );
 CREATE INDEX IF NOT EXISTS idx_api_tokens_user ON api_tokens(user_id);
+
+-- OAuth, for MCP clients that connect by URL alone and have nowhere to type a
+-- token — Gemini Spark among them. Clients register themselves (RFC 7591),
+-- the person approves once in the browser, and the flow ends by minting an
+-- ordinary api_token, so there is one kind of credential to check and revoke.
+CREATE TABLE IF NOT EXISTS oauth_clients (
+  client_id     TEXT PRIMARY KEY,
+  secret_hash   TEXT,
+  name          TEXT NOT NULL DEFAULT '',
+  redirect_uris TEXT NOT NULL DEFAULT '[]',
+  created_at    TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE TABLE IF NOT EXISTS oauth_codes (
+  code_hash      TEXT PRIMARY KEY,
+  client_id      TEXT NOT NULL,
+  user_id        INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  redirect_uri   TEXT NOT NULL,
+  code_challenge TEXT NOT NULL DEFAULT '',
+  expires_at     TEXT NOT NULL,
+  created_at     TEXT NOT NULL DEFAULT (datetime('now'))
+);
 `);
 
 // Mailboxes used to belong to exactly one person. Carry those owners over
@@ -234,6 +256,7 @@ function applyAdminPasswordFromEnv() {
 
 function purgeExpiredSessions() {
   db.prepare("DELETE FROM sessions WHERE expires_at < datetime('now')").run();
+  db.prepare("DELETE FROM oauth_codes WHERE expires_at < datetime('now')").run();
 }
 
 module.exports = { db, bootstrap, applyAdminPasswordFromEnv, purgeExpiredSessions };
