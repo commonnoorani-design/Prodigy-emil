@@ -20,7 +20,43 @@ A token acts as you for mail and your signature. It is deliberately refused by
 the administration routes, so a leaked token cannot create users or reassign
 mailboxes.
 
-## 2. Install
+## 2a. Connect by URL — no install (Gemini CLI, and anything else that takes an MCP link)
+
+The app hosts the MCP endpoint itself:
+
+```
+https://email.prodigyeducations.com/mcp
+```
+
+**Gemini CLI** — `~/.gemini/settings.json`:
+
+```json
+{
+  "mcpServers": {
+    "prodigy-mail": {
+      "httpUrl": "https://email.prodigyeducations.com/mcp",
+      "headers": { "Authorization": "Bearer pem_your_token_here" },
+      "timeout": 30000
+    }
+  }
+}
+```
+
+Or from a terminal:
+
+```bash
+gemini mcp add --transport http prodigy-mail https://email.prodigyeducations.com/mcp \
+  -H "Authorization: Bearer pem_your_token_here"
+```
+
+Start `gemini` and run `/mcp` to see the tools listed.
+
+The endpoint speaks Streamable HTTP and is stateless, so any client that
+accepts an MCP URL plus an `Authorization` header will work the same way. It
+refuses anything without a valid token, and answers in JSON-RPC so the client
+can show you why.
+
+## 2b. Install locally instead
 
 ```bash
 git clone https://github.com/commonnoorani-design/Prodigy-emil.git
@@ -28,7 +64,10 @@ cd Prodigy-emil/mcp
 npm install
 ```
 
-## 3. Point your assistant at it
+Use the local route when your assistant only speaks stdio — Claude Desktop, for
+example.
+
+## 3. Point a stdio assistant at it
 
 **Claude Desktop** — `claude_desktop_config.json`
 (macOS: `~/Library/Application Support/Claude/`, Windows: `%APPDATA%\Claude\`):

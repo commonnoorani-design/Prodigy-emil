@@ -91,10 +91,18 @@ If your host presents a self-signed certificate, set `IMAP_ALLOW_SELF_SIGNED=1` 
 The app ships an MCP server, so Claude (or any MCP client) can read your inbox,
 draft replies and send branded mail as you: [mcp/README.md](mcp/README.md).
 
-Create a token under **your initials → Change password → AI access tokens**, point
-the client at `mcp/server.js` with `PRODIGY_MAIL_URL` and `PRODIGY_MAIL_TOKEN`,
-and the assistant gets the same mail access you have — but never administration,
-and never your mailbox password. Revoke a token from the same screen at any time.
+Create a token under **your initials → Change password → AI access tokens**, then
+either:
+
+- **connect by URL** — `https://email.prodigyeducations.com/mcp` with an
+  `Authorization: Bearer pem_…` header. Nothing to install; this is what Gemini
+  CLI and other clients that take an MCP link expect.
+- **run it locally** — point a stdio client such as Claude Desktop at
+  `mcp/server.js` with `PRODIGY_MAIL_URL` and `PRODIGY_MAIL_TOKEN`.
+
+Either way the assistant gets the same mail access you have — but never
+administration, and never your mailbox password. Revoke a token from the same
+screen at any time.
 
 ## Configuration
 

@@ -59,6 +59,7 @@ app.get('/api/health', (_req, res) =>
   })
 );
 
+app.use('/mcp', require('./routes/mcp'));
 app.use('/api/setup', require('./routes/setup').router);
 app.use('/api/auth', require('./routes/auth').router);
 app.use('/api/admin', require('./routes/admin'));

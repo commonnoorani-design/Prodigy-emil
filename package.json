@@ -1,7 +1,7 @@
 {
   "name": "prodigy-emil",
   "version": "1.0.0",
-  "description": "Business email platform for Prodigy Educations \u2014 branded templates, per-user signatures and IMAP/SMTP webmail.",
+  "description": "Business email platform for Prodigy Educations — branded templates, per-user signatures and IMAP/SMTP webmail.",
   "main": "server/index.js",
   "type": "commonjs",
   "scripts": {
@@ -30,6 +30,7 @@
   },
   "homepage": "https://github.com/commonnoorani-design/Prodigy-emil#readme",
   "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.30.0",
     "bcryptjs": "^3.0.3",
     "cookie-parser": "^1.4.7",
     "dotenv": "^17.4.2",
@@ -40,6 +41,7 @@
     "multer": "^2.2.0",
     "node-sqlite3-wasm": "^0.8.45",
     "nodemailer": "^9.0.4",
-    "sanitize-html": "2.17.5"
+    "sanitize-html": "2.17.5",
+    "zod": "^3.25.76"
   }
 }

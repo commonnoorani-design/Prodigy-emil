@@ -868,8 +868,11 @@
       box.className = 'form-note';
       box.innerHTML =
         `Copy this now — it is shown once and never again:<br><code>${esc(data.token)}</code>` +
-        `<br><br>Put it in your MCP client as <code>PRODIGY_MAIL_TOKEN</code>, with ` +
-        `<code>PRODIGY_MAIL_URL=${esc(location.origin)}</code>.`;
+        `<br><br><strong>Connect by URL</strong> (Gemini CLI and similar): point the client at ` +
+        `<code>${esc(location.origin)}/mcp</code> with the header ` +
+        `<code>Authorization: Bearer &lt;the token above&gt;</code>.` +
+        `<br><strong>Or locally</strong> (Claude Desktop): run <code>mcp/server.js</code> with ` +
+        `<code>PRODIGY_MAIL_URL=${esc(location.origin)}</code> and <code>PRODIGY_MAIL_TOKEN</code>.`;
       box.classList.remove('hidden');
       $('#token-name').value = '';
       loadTokens();
