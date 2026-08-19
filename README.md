@@ -86,6 +86,16 @@ If your host presents a self-signed certificate, set `IMAP_ALLOW_SELF_SIGNED=1` 
 1. **My signature** — upload a photo and fill in your details. The live preview shows both the signature card and a full sample message.
 2. **Mailbox** — read, search, reply, forward, attach. The template is applied on send; **Preview** shows exactly what the recipient will get.
 
+## Connecting an AI assistant
+
+The app ships an MCP server, so Claude (or any MCP client) can read your inbox,
+draft replies and send branded mail as you: [mcp/README.md](mcp/README.md).
+
+Create a token under **your initials → Change password → AI access tokens**, point
+the client at `mcp/server.js` with `PRODIGY_MAIL_URL` and `PRODIGY_MAIL_TOKEN`,
+and the assistant gets the same mail access you have — but never administration,
+and never your mailbox password. Revoke a token from the same screen at any time.
+
 ## Configuration
 
 Everything lives in `.env` (see `.env.example`). Branding — company name, tagline, website, support address, WhatsApp number, established year, optional postal address, and the brand colours — is read from there, so the header, footer and signatures update everywhere at once.
@@ -135,6 +145,7 @@ server/
   mail/mailboxes.js   mailbox records and credential access
   routes/             auth, admin, signature, mail
 public/               single-page client (no build step)
+mcp/server.js         MCP server, so an AI assistant can use your mailbox
 scripts/seed-admin.js recover or add an administrator from the CLI
 ```
 

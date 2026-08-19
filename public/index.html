@@ -344,6 +344,26 @@
           <div id="p-msg" class="form-note hidden"></div>
           <div class="row-actions"><button class="btn btn-primary" type="submit">Update password</button></div>
         </form>
+
+        <div class="card">
+          <h2>AI access tokens</h2>
+          <p class="muted" style="margin:4px 0 0;font-size:12.5px">
+            Lets an AI assistant read and send mail as you, through the MCP server.
+            A token can do everything you can with mail — but never administration.
+            Revoke it here the moment you stop using it.
+          </p>
+          <form id="token-form" class="row-actions" style="margin-top:14px">
+            <input id="token-name" placeholder="What is it for? e.g. Claude Desktop" maxlength="60" style="flex:1" />
+            <button class="btn btn-primary" type="submit">Create token</button>
+          </form>
+          <div id="token-new" class="form-note hidden"></div>
+          <div class="table-wrap">
+            <table class="table" id="tokens-table">
+              <thead><tr><th>Name</th><th>Created</th><th>Last used</th><th></th></tr></thead>
+              <tbody></tbody>
+            </table>
+          </div>
+        </div>
       </div>
     </main>
   </div>

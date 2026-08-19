@@ -87,4 +87,31 @@ router.post('/password', auth.requireAuth, (req, res) => {
   res.json({ ok: true });
 });
 
+// ---------------------------------------------------------------------------
+// API tokens — how an AI assistant connects without being handed a password.
+// A token acts as its owner for mail and signature routes only.
+// ---------------------------------------------------------------------------
+router.get('/tokens', auth.requireAuth, (req, res) => {
+  res.json({ tokens: auth.listApiTokens(req.user.id) });
+});
+
+router.post('/tokens', auth.requireAuth, (req, res) => {
+  if (req.viaApiToken) {
+    return res.status(403).json({ error: 'A token cannot mint another token' });
+  }
+  const name = String(req.body.name || '').trim() || 'AI assistant';
+  if (auth.listApiTokens(req.user.id).length >= 10) {
+    return res.status(400).json({ error: 'You already have 10 tokens — revoke one first' });
+  }
+  const { id, token } = auth.createApiToken(req.user.id, name);
+  // Shown exactly once; only its hash is kept.
+  res.status(201).json({ id, name, token });
+});
+
+router.delete('/tokens/:id', auth.requireAuth, (req, res) => {
+  const ok = auth.revokeApiToken(req.user.id, Number(req.params.id));
+  if (!ok) return res.status(404).json({ error: 'Token not found' });
+  res.json({ ok: true });
+});
+
 module.exports = { router, publicUser };

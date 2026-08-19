@@ -110,6 +110,20 @@ CREATE TABLE IF NOT EXISTS mailbox_access (
   PRIMARY KEY (mailbox_id, user_id)
 );
 CREATE INDEX IF NOT EXISTS idx_mailbox_access_user ON mailbox_access(user_id);
+
+-- Long-lived bearer tokens, so an AI assistant (or any other client) can act
+-- as a user over the API without holding their password. Deliberately barred
+-- from the administration routes: a leaked token must not be able to reassign
+-- mailboxes or read out another person's account.
+CREATE TABLE IF NOT EXISTS api_tokens (
+  id           INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id      INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  name         TEXT NOT NULL DEFAULT '',
+  token_hash   TEXT NOT NULL UNIQUE,
+  created_at   TEXT NOT NULL DEFAULT (datetime('now')),
+  last_used_at TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_api_tokens_user ON api_tokens(user_id);
 `);
 
 // Mailboxes used to belong to exactly one person. Carry those owners over

@@ -1,0 +1,14 @@
+{
+  "name": "prodigy-mail-mcp",
+  "version": "1.0.0",
+  "description": "MCP server for Prodigy Educations Mail — lets an AI assistant read and send business email.",
+  "type": "module",
+  "bin": { "prodigy-mail-mcp": "server.js" },
+  "main": "server.js",
+  "engines": { "node": ">=18" },
+  "license": "UNLICENSED",
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.30.0",
+    "zod": "^3.25.0"
+  }
+}

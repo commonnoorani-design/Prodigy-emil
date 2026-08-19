@@ -222,6 +222,7 @@
     $('#sidebar').classList.remove('open');
     if (view === 'signature') refreshSignaturePreview();
     if (view === 'admin') loadAdmin();
+    if (view === 'account') loadTokens();
   }
 
   $$('[data-nav]').forEach((btn) => btn.addEventListener('click', () => navigate(btn.dataset.nav)));
@@ -824,6 +825,56 @@
       msg.textContent = ex.message;
       msg.classList.add('error');
       msg.classList.remove('hidden');
+    }
+  });
+
+  // ───────────────────────── AI access tokens ─────────────────────────
+  async function loadTokens() {
+    try {
+      const { tokens } = await api('/api/auth/tokens');
+      $('#tokens-table tbody').innerHTML = tokens.length
+        ? tokens
+            .map(
+              (t) => `<tr>
+                <td><strong>${esc(t.name)}</strong></td>
+                <td class="muted">${esc(t.created_at)}</td>
+                <td class="muted">${t.last_used_at ? esc(t.last_used_at) : 'never'}</td>
+                <td><div class="actions"><button class="btn btn-ghost danger" data-revoke="${t.id}">Revoke</button></div></td>
+              </tr>`
+            )
+            .join('')
+        : '<tr><td colspan="4" class="muted" style="padding:16px;text-align:center">No tokens yet.</td></tr>';
+      $$('#tokens-table [data-revoke]').forEach((b) =>
+        b.addEventListener('click', async () => {
+          if (!confirm('Revoke this token? Anything using it stops working immediately.')) return;
+          try {
+            await api(`/api/auth/tokens/${b.dataset.revoke}`, { method: 'DELETE' });
+            loadTokens();
+          } catch (err) {
+            toast(err.message, 'error');
+          }
+        })
+      );
+    } catch (err) {
+      toast(err.message, 'error');
+    }
+  }
+
+  $('#token-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    try {
+      const data = await api('/api/auth/tokens', { method: 'POST', body: { name: $('#token-name').value } });
+      const box = $('#token-new');
+      box.className = 'form-note';
+      box.innerHTML =
+        `Copy this now — it is shown once and never again:<br><code>${esc(data.token)}</code>` +
+        `<br><br>Put it in your MCP client as <code>PRODIGY_MAIL_TOKEN</code>, with ` +
+        `<code>PRODIGY_MAIL_URL=${esc(location.origin)}</code>.`;
+      box.classList.remove('hidden');
+      $('#token-name').value = '';
+      loadTokens();
+    } catch (err) {
+      toast(err.message, 'error');
     }
   });
 
