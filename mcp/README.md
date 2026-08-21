@@ -198,4 +198,10 @@ so a client that runs inside a browser can reach it too.
     -H 'Accept: application/json, text/event-stream' \
     -d '{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}'
   ```
+- A client that connects but reports every tool failing is a different fault:
+  the tools reach the app through its own API, and some hosts will not let it
+  call itself. Ask it directly —
+  `https://email.prodigyeducations.com/api/health?selftest=1` — and read the
+  `selfTest` list. At least one address has to say `"ok": true`; the app uses
+  the first that answers, falling back to its public address.
 - The server needs Node 18 or newer.

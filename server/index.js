@@ -86,8 +86,8 @@ app.use(
 const INSTANCE = require('crypto').randomBytes(4).toString('hex');
 const STARTED_AT = Date.now();
 
-app.get('/api/health', (_req, res) =>
-  res.json({
+app.get('/api/health', async (req, res) => {
+  const health = {
     ok: true,
     brand: config.brand.name,
     build: buildId(),
@@ -99,8 +99,13 @@ app.get('/api/health', (_req, res) =>
     needsSetup: require('./routes/setup').needsSetup(),
     dataDir: config.dataDir,
     dbFile: config.dbFile,
-  })
-);
+  };
+  // ?selftest=1 asks the app to call its own API the way the MCP tools do.
+  // When an assistant reports every tool failing, this says whether the app
+  // can reach itself at all, and on which address.
+  if (req.query.selftest) health.selfTest = await mcp.selfTest(req);
+  res.json(health);
+});
 
 // MCP authorization discovery. A client that gets a 401 from /mcp reads these
 // to find out how to ask for access — which is the only route in for a client
@@ -170,6 +175,7 @@ purgeExpiredSessions();
 setInterval(purgeExpiredSessions, 60 * 60 * 1000).unref();
 
 const server = app.listen(config.port, () => {
+  require('./self').set(server.address());
   console.log(`${config.brand.name} Mail running on ${config.appUrl || `http://localhost:${config.port}`}`);
   if (credentials) {
     console.log('\n──────────────────────────────────────────────');
