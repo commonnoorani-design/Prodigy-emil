@@ -113,6 +113,18 @@ app.get('/api/health', async (req, res) => {
     dbHealthy: (maintenance.lastIntegrity() || {}).ok !== false,
     dbCheckedAt: (maintenance.lastIntegrity() || {}).at || null,
     backups: maintenance.list().length,
+    // While the database is damaged nobody can sign in to look at the
+    // administration screen, so the detail needed to act has to be here.
+    // SQLite's complaints name pages and indexes; they give nothing away.
+    ...(damaged
+      ? {
+          dbCheck: (maintenance.lastIntegrity() || {}).messages || [],
+          backupList: maintenance.list().map((b) => b.name),
+        }
+      : {}),
+    // A repair that worked is worth reporting too — it says what it did and
+    // what, if anything, did not come back.
+    ...(maintenance.lastRepair() ? { dbRepair: maintenance.lastRepair() } : {}),
   };
   // ?selftest=1 asks the app to call its own API the way the MCP tools do.
   // When an assistant reports every tool failing, this says whether the app

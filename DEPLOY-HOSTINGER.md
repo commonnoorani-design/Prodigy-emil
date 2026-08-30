@@ -157,8 +157,24 @@ file at every start, and if the check fails it comes up refusing to use it —
 `/api/health` reports `"dbHealthy": false`, everything else answers 503, and
 nothing is written.
 
-**Put the last good copy back.** In hPanel → *Settings & Redeploy* →
-*Environment variables*:
+**First, try to repair it — that usually costs nothing.** In hPanel →
+*Settings & Redeploy* → *Environment variables*:
+
+```
+REPAIR_DB   1
+```
+
+Restart. Most damage is a broken index: every row is still there, and the
+structure that points at them is not. Rebuilding the indexes fixes that with
+nothing lost. If that is not enough the app rewrites the file from its own
+contents, and if that fails too it copies everything still readable into a
+fresh database and tells you what did not come back. The damaged file is kept
+either way, and it is attempted once — clear `REPAIR_DB` afterwards.
+
+`/api/health` reports the outcome as `dbRepair`, and `dbHealthy` should be
+`true` again.
+
+**If repair cannot do it, put the last good copy back.** Same place:
 
 ```
 RESTORE_BACKUP   latest
@@ -172,7 +188,7 @@ backup — copies the backup into place, and starts normally. Check the result i
 To choose a specific copy instead of the newest, put its filename there. The
 list is on that same screen, where you can also download one.
 
-**What you lose:** whatever was written between that backup and the damage.
+**What a restore loses:** whatever was written between that backup and the damage.
 Backups are taken at start-up and every six hours, so at worst that is a few
 hours of account and signature changes. Mail is not affected either way — it
 lives on your mail server, not here.

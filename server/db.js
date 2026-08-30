@@ -13,13 +13,23 @@ fs.mkdirSync(config.uploadDir, { recursive: true });
 // Putting a backup back has to happen before anything opens the file.
 maintenance.restoreIfRequested();
 
-const db = new Database(config.dbFile);
+let db = new Database(config.dbFile);
 
 // Prove the file before writing to it. Creating tables in a database that is
 // already damaged turns a recoverable file into a lost one, and crashing on
 // the attempt leaves nobody anywhere to be told what happened — so check
 // first, and if it fails, carry on far enough to report it.
-const startupCheck = maintenance.record(maintenance.integrity(db, { quick: true }));
+let startupCheck = maintenance.record(maintenance.integrity(db, { quick: true }));
+
+// A broken index is not lost data. Given REPAIR_DB, try to put the file right
+// before falling back to a backup, which costs everything written since.
+if (!startupCheck.ok && maintenance.repairRequested()) {
+  db.close();
+  maintenance.recordRepair(maintenance.repair(Database));
+  db = new Database(config.dbFile);
+  startupCheck = maintenance.record(maintenance.integrity(db, { quick: true }));
+}
+
 const damaged = startupCheck.ok ? null : startupCheck;
 
 if (!damaged) {

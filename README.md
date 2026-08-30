@@ -144,7 +144,9 @@ Accounts, signatures, mailbox settings and the sent log live in one SQLite file.
 - **Administration → Database** shows the verdict, runs a full check on demand, backs up on demand, and lets you download any backup. Download one occasionally: that is the copy that survives losing the server.
 - If the file is damaged, the app starts but refuses to use it — `/api/health` says `dbHealthy: false`, every other route answers 503, and nothing writes to make the damage worse.
 
-To put a backup back, set `RESTORE_BACKUP` to its filename (or `latest`) and restart. The database in place is moved aside as `replaced-…` — never deleted, because it still holds everything written since that backup. Clear the setting once you have checked the result.
+If it is damaged, try repairing it before reaching for a backup: set `REPAIR_DB=1` and restart. Most damage is a broken *index* — the rows are all still there, the b-tree over them is not — and rebuilding the indexes costs nothing. Failing that the file is rewritten from its own contents, and failing that everything still readable is copied into a fresh database. Each attempt keeps the damaged file, and it is tried once, so a restart loop cannot grind away at it.
+
+To put a backup back instead, set `RESTORE_BACKUP` to its filename (or `latest`) and restart. The database in place is moved aside as `replaced-…` — never deleted, because it still holds everything written since that backup. Clear the setting once you have checked the result.
 
 With a shell, the same jobs are `npm run db check`, `npm run db backup` and `npm run db list`.
 

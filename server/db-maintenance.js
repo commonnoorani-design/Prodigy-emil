@@ -171,9 +171,250 @@ function restoreIfRequested() {
 }
 
 // ---------------------------------------------------------------------------
+// Repair
+// ---------------------------------------------------------------------------
+/**
+ * Damage is not always loss.
+ *
+ * The common case — the one that took this app down — is a broken *index*:
+ * the rows are all still there, the b-tree that points at them is not.
+ * Rebuilding the indexes fixes that outright and keeps everything. Only when
+ * that fails is it worth rewriting the file, and only when that fails too is
+ * it worth salvaging what can still be read into a fresh database.
+ *
+ * Asked for with REPAIR_DB=1, and attempted once per value of it, so a restart
+ * loop cannot grind away at a file that is beyond repair. The damaged file is
+ * always kept.
+ */
+const REPAIR_MARKER = path.join(BACKUP_DIR, '.repaired');
+
+function repairRequested() {
+  const wanted = String(process.env.REPAIR_DB || '').trim();
+  if (!wanted || wanted === '0' || wanted.toLowerCase() === 'false') return false;
+  try {
+    if (fs.readFileSync(REPAIR_MARKER, 'utf8').trim() === wanted) return false;
+  } catch {
+    /* never repaired before */
+  }
+  return true;
+}
+
+function markRepaired() {
+  try {
+    fs.writeFileSync(REPAIR_MARKER, String(process.env.REPAIR_DB || '1').trim());
+  } catch {
+    /* the worst case is repairing twice */
+  }
+}
+
+/** Put a rebuilt file in place of the live one. */
+function swapIn(candidate) {
+  for (const suffix of ['-journal', '-wal', '-shm']) {
+    fs.rmSync(`${config.dbFile}${suffix}`, { force: true });
+  }
+  fs.rmSync(`${config.dbFile}.lock`, { recursive: true, force: true });
+  fs.rmSync(`${config.dbFile}.owner`, { force: true });
+  fs.rmSync(config.dbFile, { force: true });
+  fs.renameSync(candidate, config.dbFile);
+}
+
+/** Read a table even when part of it will not come back. */
+function readRows(source, table) {
+  try {
+    return { rows: source.prepare(`SELECT * FROM "${table}"`).all(), whole: true };
+  } catch {
+    // Something in there is unreadable. Take it in pieces and keep the pieces
+    // that come back, rather than losing the table for one bad page.
+    const rows = [];
+    let missed = 0;
+    for (let offset = 0; offset < 200_000; offset += 100) {
+      let chunk;
+      try {
+        chunk = source.prepare(`SELECT * FROM "${table}" LIMIT 100 OFFSET ${offset}`).all();
+      } catch {
+        missed += 100;
+        continue;
+      }
+      if (!chunk.length) break;
+      rows.push(...chunk);
+    }
+    return { rows, whole: false, missed };
+  }
+}
+
+/** Tables worth nothing once the app restarts — never worth salvaging. */
+const DISPOSABLE = new Set(['sessions', 'oauth_codes']);
+
+function salvage(Database, notes) {
+  const target = `${config.dbFile}.salvaged`;
+  fs.rmSync(target, { force: true });
+
+  const source = new Database(config.dbFile);
+  const fresh = new Database(target);
+  try {
+    const objects = source.prepare(
+      "SELECT type, name, sql FROM sqlite_master WHERE sql IS NOT NULL AND name NOT LIKE 'sqlite_%'"
+    ).all();
+    const tables = objects.filter((o) => o.type === 'table');
+    const rest = objects.filter((o) => o.type !== 'table');
+
+    tables.forEach((t) => fresh.exec(t.sql));
+
+    for (const { name } of tables) {
+      if (DISPOSABLE.has(name)) {
+        notes.push(`${name}: left empty (it holds nothing worth keeping)`);
+        continue;
+      }
+      const { rows, whole, missed } = readRows(source, name);
+      if (!rows.length) {
+        notes.push(`${name}: ${whole ? 'empty' : 'nothing could be read'}`);
+        continue;
+      }
+      const columns = Object.keys(rows[0]);
+      const insert = fresh.prepare(
+        `INSERT OR IGNORE INTO "${name}" (${columns.map((c) => `"${c}"`).join(', ')}) ` +
+          `VALUES (${columns.map(() => '?').join(', ')})`
+      );
+      let saved = 0;
+      let lost = 0;
+      for (const row of rows) {
+        try {
+          insert.run(columns.map((c) => row[c]));
+          saved += 1;
+        } catch {
+          lost += 1;
+        }
+      }
+      notes.push(
+        `${name}: ${saved} row${saved === 1 ? '' : 's'} recovered` +
+          (lost ? `, ${lost} rejected` : '') +
+          (whole ? '' : `, about ${missed} unreadable`)
+      );
+    }
+
+    // Indexes last: building them over the rows is the point of the exercise.
+    rest.forEach((o) => {
+      try {
+        fresh.exec(o.sql);
+      } catch (err) {
+        notes.push(`could not rebuild ${o.type} ${o.name}: ${err.message}`);
+      }
+    });
+
+    const after = integrity(fresh, {});
+    fresh.close();
+    source.close();
+    if (!after.ok) {
+      notes.push('the salvaged copy did not come out clean either');
+      fs.rmSync(target, { force: true });
+      return false;
+    }
+    swapIn(target);
+    return true;
+  } catch (err) {
+    notes.push(`salvage failed: ${err.message}`);
+    try {
+      fresh.close();
+    } catch {
+      /* already gone */
+    }
+    try {
+      source.close();
+    } catch {
+      /* already gone */
+    }
+    fs.rmSync(target, { force: true });
+    return false;
+  }
+}
+
+function repair(Database) {
+  ensureDir();
+  const notes = [];
+  const kept = path.join(BACKUP_DIR, `before-repair-${stamp()}.db`);
+  fs.copyFileSync(config.dbFile, kept);
+  notes.push(`the damaged file is kept as ${path.basename(kept)}`);
+
+  const attempt = (label, fn) => {
+    try {
+      return fn();
+    } catch (err) {
+      notes.push(`${label}: ${err.message}`);
+      return false;
+    }
+  };
+
+  // 1. Rebuild the indexes in place. Loses nothing when it works.
+  const reindexed = attempt('rebuilding the indexes', () => {
+    const db = new Database(config.dbFile);
+    try {
+      db.exec('REINDEX');
+      return integrity(db, {}).ok;
+    } finally {
+      db.close();
+    }
+  });
+  if (reindexed) {
+    notes.push('rebuilding the indexes was enough — no rows were lost');
+    markRepaired();
+    return { ok: true, method: 'reindex', notes };
+  }
+  notes.push('rebuilding the indexes did not fix it');
+
+  // 2. Rewrite the file from its own contents.
+  const rebuilt = attempt('rewriting the file', () => {
+    const candidate = `${config.dbFile}.rebuilt`;
+    fs.rmSync(candidate, { force: true });
+    const db = new Database(config.dbFile);
+    try {
+      db.finalizeAll();
+      db.exec(`VACUUM INTO '${candidate.replace(/'/g, "''")}'`);
+    } finally {
+      db.close();
+    }
+    const check = new Database(candidate);
+    const after = integrity(check, {});
+    check.close();
+    if (!after.ok) {
+      fs.rmSync(candidate, { force: true });
+      return false;
+    }
+    swapIn(candidate);
+    return true;
+  });
+  if (rebuilt) {
+    notes.push('the file was rewritten from its own contents — no rows were lost');
+    markRepaired();
+    return { ok: true, method: 'rebuild', notes };
+  }
+  notes.push('rewriting the file did not fix it — keeping what can still be read');
+
+  // 3. Keep whatever can still be read.
+  if (salvage(Database, notes)) {
+    markRepaired();
+    return { ok: true, method: 'salvage', notes };
+  }
+
+  markRepaired();
+  notes.push('nothing could be repaired — restore a backup instead (RESTORE_BACKUP=latest)');
+  return { ok: false, method: 'none', notes };
+}
+
+// ---------------------------------------------------------------------------
 // Start-up routine
 // ---------------------------------------------------------------------------
 let lastCheck = null;
+let lastRepair = null;
+
+/** Keep what a repair attempt did, for the log and for /api/health. */
+function recordRepair(outcome) {
+  lastRepair = { ...outcome, at: new Date().toISOString() };
+  console.log('\n──────────────────────────────────────────────');
+  console.log(outcome.ok ? ` Database repaired (${outcome.method})` : ' Database could not be repaired');
+  outcome.notes.forEach((note) => console.log(`   ${note}`));
+  console.log('──────────────────────────────────────────────\n');
+  return lastRepair;
+}
 
 /** Keep a check result as the current verdict on the file. */
 function record(result) {
@@ -218,6 +459,10 @@ module.exports = {
   BACKUP_DIR,
   backup,
   record,
+  repair,
+  repairRequested,
+  recordRepair,
+  lastRepair: () => lastRepair,
   backupIfDue,
   integrity,
   lastIntegrity,
