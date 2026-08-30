@@ -508,6 +508,50 @@
     }
   });
 
+  // ───────────────── Print / save the open message ─────────────────
+  /** The open message, described the way the printable sheet wants it. */
+  function printableDoc() {
+    const m = state.current;
+    return {
+      subject: m.subject,
+      from: [who(m.from), addr(m.from) ? `<${addr(m.from)}>` : ''].filter(Boolean).join(' '),
+      to: addr(m.to),
+      cc: addr(m.cc),
+      date: fullDate(m.date),
+      attachments: (m.attachments || []).map((a) => `${a.filename} (${bytes(a.size || 0)})`),
+      bodyHtml: m.html || `<pre>${esc(m.text || '')}</pre>`,
+      brand: state.brand || {},
+    };
+  }
+
+  $('#print-btn').addEventListener('click', async () => {
+    if (!state.current) return;
+    try {
+      await MailExport.print(printableDoc());
+    } catch (err) {
+      toast(err.message, 'error');
+    }
+  });
+
+  $('#png-btn').addEventListener('click', async (e) => {
+    if (!state.current) return;
+    const button = e.currentTarget;
+    button.disabled = true;
+    try {
+      const { dropped } = await MailExport.png(printableDoc());
+      toast(
+        dropped
+          ? `Saved as PNG — ${dropped} image${dropped > 1 ? 's' : ''} hosted elsewhere could not be included.`
+          : 'Saved as PNG',
+        dropped ? '' : 'success'
+      );
+    } catch (err) {
+      toast(err.message, 'error');
+    } finally {
+      button.disabled = false;
+    }
+  });
+
   $('#delete-btn').addEventListener('click', async () => {
     if (!state.current) return;
     if (!confirm('Move this message to Trash?')) return;

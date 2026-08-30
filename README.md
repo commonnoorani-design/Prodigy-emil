@@ -14,6 +14,7 @@
 - **One signature layout for everyone**, filled in per person: profile picture, name, designation, email, phone (with how the number may be used), and a meeting link.
 - **Multiple users with one or more administrators.** Only an administrator assigns business email addresses.
 - **A copy of everything sent is filed in the account's Sent folder** over IMAP, plus an in-app audit log.
+- **Print a message, or save it as a PNG** — both on company letterhead, with who it was between and when.
 
 ## The message template
 
@@ -85,6 +86,7 @@ If your host presents a self-signed certificate, set `IMAP_ALLOW_SELF_SIGNED=1` 
 **Everyone**
 1. **My signature** — upload a photo and fill in your details. The live preview shows both the signature card and a full sample message.
 2. **Mailbox** — read, search, reply, forward, attach. The template is applied on send; **Preview** shows exactly what the recipient will get.
+3. **Print** and **Save as PNG**, on an open message, lay it out on company letterhead — subject, sender, recipients, date, attachment names, then the message. Printing uses the browser's own dialogue, so "Save as PDF" is there too. Pictures the sender hosted elsewhere cannot travel into a PNG; the app says so when it drops one, and printing keeps them.
 
 ## Connecting an AI assistant
 
@@ -155,6 +157,7 @@ server/
   mail/mailboxes.js   mailbox records and credential access
   routes/             auth, admin, signature, mail
 public/               single-page client (no build step)
+  print.js            printing a message and saving it as an image
 mcp/server.js         MCP server, so an AI assistant can use your mailbox
 scripts/seed-admin.js recover or add an administrator from the CLI
 ```

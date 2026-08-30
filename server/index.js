@@ -138,7 +138,7 @@ function renderIndex() {
     indexHtml = fs
       .readFileSync(INDEX_FILE, 'utf8')
       .replace(
-        /(href|src)="\/(app\.js|styles\.css|assets\/[^"?]+)"/g,
+        /(href|src)="\/([^"?:]+\.(?:js|css)|assets\/[^"?]+)"/g,
         (_match, attr, file) => `${attr}="/${file}?v=${version}"`
       );
   }
