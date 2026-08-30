@@ -230,6 +230,7 @@
           <button class="tab active" data-tab="users">Users</button>
           <button class="tab" data-tab="mailboxes">Business emails</button>
           <button class="tab" data-tab="log">Sent log</button>
+          <button class="tab" data-tab="database">Database</button>
         </div>
 
         <!-- Users tab -->
@@ -327,6 +328,43 @@
                 <tbody></tbody>
               </table>
             </div>
+          </div>
+        </section>
+
+        <!-- Database tab -->
+        <section class="tab-panel hidden" data-panel="database">
+          <div class="card">
+            <h2>Database</h2>
+            <p class="muted" style="margin-top:-4px">
+              Everything except the mail itself lives in one SQLite file: accounts, signatures,
+              mailbox settings and the sent log. Mail stays on your mail server.
+            </p>
+            <div id="db-status" class="db-status">Loading…</div>
+            <div class="form-actions" style="justify-content:flex-start;gap:8px">
+              <button class="btn btn-ghost" id="db-check-btn" type="button">Check it now</button>
+              <button class="btn btn-primary" id="db-backup-btn" type="button">Back up now</button>
+            </div>
+            <div id="db-msg" class="form-note hidden"></div>
+          </div>
+
+          <div class="card">
+            <h2>Backups</h2>
+            <p class="muted" style="margin-top:-4px">
+              Taken automatically at start-up and every six hours, and only ever from a database that
+              has passed its check. The most recent twelve are kept. Download one to keep it somewhere
+              else — that is the copy that survives losing the server.
+            </p>
+            <div class="table-wrap">
+              <table class="table" id="db-backups">
+                <thead><tr><th>Backup</th><th>Taken</th><th>Size</th><th></th></tr></thead>
+                <tbody></tbody>
+              </table>
+            </div>
+            <p class="muted" style="font-size:12px">
+              To put one back: set <code>RESTORE_BACKUP</code> to its filename (or <code>latest</code>)
+              in the hosting panel and restart. The database in place is moved aside, never deleted.
+              Clear the setting once you have checked the result.
+            </p>
           </div>
         </section>
       </div>

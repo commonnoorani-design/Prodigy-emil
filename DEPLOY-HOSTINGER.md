@@ -150,6 +150,41 @@ reset, so it doubles as the recovery route if you are ever locked out.
 
 ---
 
+## "database disk image is malformed"
+
+The SQLite file has been damaged. The app will not make it worse: it checks the
+file at every start, and if the check fails it comes up refusing to use it —
+`/api/health` reports `"dbHealthy": false`, everything else answers 503, and
+nothing is written.
+
+**Put the last good copy back.** In hPanel → *Settings & Redeploy* →
+*Environment variables*:
+
+```
+RESTORE_BACKUP   latest
+```
+
+Restart. The app moves the damaged file aside as `backups/replaced-<date>.db`
+— it is never deleted, because it still holds everything written since the last
+backup — copies the backup into place, and starts normally. Check the result in
+**Administration → Database**, then clear `RESTORE_BACKUP`.
+
+To choose a specific copy instead of the newest, put its filename there. The
+list is on that same screen, where you can also download one.
+
+**What you lose:** whatever was written between that backup and the damage.
+Backups are taken at start-up and every six hours, so at worst that is a few
+hours of account and signature changes. Mail is not affected either way — it
+lives on your mail server, not here.
+
+**Why it happened.** Two copies of the app writing one database file is the
+usual cause. The app now refuses to clear a write lock held by another machine
+and logs `the write lock is held by another machine` instead, so if that is what
+is happening it will say so. Check that only one deployment is running against
+`DATA_DIR`, and that `DATA_DIR` is not on shared storage two sites both use.
+
+---
+
 ## Sign-in is accepted, then you are back on the sign-in page
 
 The password went through — an incorrect one says so — and the very next

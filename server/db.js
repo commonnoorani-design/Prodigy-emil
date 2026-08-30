@@ -5,15 +5,28 @@ const path = require('path');
 const Database = require('./sqlite');
 const bcrypt = require('bcryptjs');
 const config = require('./config');
+const maintenance = require('./db-maintenance');
 
 fs.mkdirSync(path.dirname(config.dbFile), { recursive: true });
 fs.mkdirSync(config.uploadDir, { recursive: true });
 
-const db = new Database(config.dbFile);
-db.pragma('journal_mode = WAL');
-db.pragma('foreign_keys = ON');
+// Putting a backup back has to happen before anything opens the file.
+maintenance.restoreIfRequested();
 
-db.exec(`
+const db = new Database(config.dbFile);
+
+// Prove the file before writing to it. Creating tables in a database that is
+// already damaged turns a recoverable file into a lost one, and crashing on
+// the attempt leaves nobody anywhere to be told what happened — so check
+// first, and if it fails, carry on far enough to report it.
+const startupCheck = maintenance.record(maintenance.integrity(db, { quick: true }));
+const damaged = startupCheck.ok ? null : startupCheck;
+
+if (!damaged) {
+  db.pragma('journal_mode = WAL');
+  db.pragma('foreign_keys = ON');
+
+  db.exec(`
 CREATE TABLE IF NOT EXISTS users (
   id            INTEGER PRIMARY KEY AUTOINCREMENT,
   login_email   TEXT NOT NULL UNIQUE,
@@ -148,14 +161,15 @@ CREATE TABLE IF NOT EXISTS oauth_codes (
 );
 `);
 
-// Mailboxes used to belong to exactly one person. Carry those owners over
-// once, so existing installs keep working after the upgrade.
-if (!getSetting('mailbox_access_migrated')) {
-  db.prepare(
-    `INSERT OR IGNORE INTO mailbox_access (mailbox_id, user_id, is_default)
-     SELECT id, user_id, is_default FROM mailboxes`
-  ).run();
-  setSetting('mailbox_access_migrated', '1');
+  // Mailboxes used to belong to exactly one person. Carry those owners over
+  // once, so existing installs keep working after the upgrade.
+  if (!getSetting('mailbox_access_migrated')) {
+    db.prepare(
+      `INSERT OR IGNORE INTO mailbox_access (mailbox_id, user_id, is_default)
+       SELECT id, user_id, is_default FROM mailboxes`
+    ).run();
+    setSetting('mailbox_access_migrated', '1');
+  }
 }
 
 function getSetting(key) {
@@ -259,4 +273,4 @@ function purgeExpiredSessions() {
   db.prepare("DELETE FROM oauth_codes WHERE expires_at < datetime('now')").run();
 }
 
-module.exports = { db, bootstrap, applyAdminPasswordFromEnv, purgeExpiredSessions };
+module.exports = { db, damaged, bootstrap, applyAdminPasswordFromEnv, purgeExpiredSessions, maintenance };

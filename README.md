@@ -133,6 +133,21 @@ server {
 
 Keep it running with systemd, pm2 or Docker. Back up the `data/` directory — it holds the SQLite database, the uploaded profile pictures and the encryption key.
 
+Run **one** copy of the app against a given `DATA_DIR`. Two processes writing one SQLite file is the ordinary way such a file ends up corrupted; the app notices a lock held by another machine and says so rather than pushing past it.
+
+## Looking after the database
+
+Accounts, signatures, mailbox settings and the sent log live in one SQLite file. (Mail itself stays on your mail server, so it is never at risk here.)
+
+- The file is checked at every start, before anything is written to it.
+- A backup is taken at start-up and every six hours — with `VACUUM INTO`, so it is safe while the app runs — and only ever from a database that passed its check. The most recent twelve are kept in `DATA_DIR/backups`.
+- **Administration → Database** shows the verdict, runs a full check on demand, backs up on demand, and lets you download any backup. Download one occasionally: that is the copy that survives losing the server.
+- If the file is damaged, the app starts but refuses to use it — `/api/health` says `dbHealthy: false`, every other route answers 503, and nothing writes to make the damage worse.
+
+To put a backup back, set `RESTORE_BACKUP` to its filename (or `latest`) and restart. The database in place is moved aside as `replaced-…` — never deleted, because it still holds everything written since that backup. Clear the setting once you have checked the result.
+
+With a shell, the same jobs are `npm run db check`, `npm run db backup` and `npm run db list`.
+
 ## Security notes
 
 - Mailbox passwords are encrypted with AES-256-GCM under a per-install key (`SECRET_KEY`, or `data/secret.key` when that is unset); they are never returned to the browser.
@@ -159,7 +174,9 @@ server/
 public/               single-page client (no build step)
   print.js            printing a message and saving it as an image
 mcp/server.js         MCP server, so an AI assistant can use your mailbox
+server/db-maintenance.js  integrity checks, backups and restore
 scripts/seed-admin.js recover or add an administrator from the CLI
+scripts/db-tool.js    check, back up or list backups from a shell
 ```
 
 ## Recovering administrator access

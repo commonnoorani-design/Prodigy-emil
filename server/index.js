@@ -6,7 +6,7 @@ const express = require('express');
 const cookieParser = require('cookie-parser');
 
 const config = require('./config');
-const { db, bootstrap, applyAdminPasswordFromEnv, purgeExpiredSessions } = require('./db');
+const { db, damaged, bootstrap, applyAdminPasswordFromEnv, purgeExpiredSessions, maintenance } = require('./db');
 const authMw = require('./auth');
 const imap = require('./mail/imap');
 const { buildId } = require('./build');
@@ -34,7 +34,14 @@ app.use((_req, res, next) => {
   next();
 });
 
-app.use(authMw.attachUser);
+app.use(
+  damaged
+    ? (req, _res, next) => {
+        req.user = null;
+        next();
+      }
+    : authMw.attachUser
+);
 
 // Signature profile pictures. Served to signed-in users only — these are
 // staff photos, not public assets.
@@ -93,12 +100,19 @@ app.get('/api/health', async (req, res) => {
     build: buildId(),
     instance: INSTANCE,
     uptimeSeconds: Math.round((Date.now() - STARTED_AT) / 1000),
-    sessions: db.prepare("SELECT COUNT(*) AS n FROM sessions WHERE expires_at > datetime('now')").get().n,
+    sessions: damaged
+      ? null
+      : db.prepare("SELECT COUNT(*) AS n FROM sessions WHERE expires_at > datetime('now')").get().n,
     adminEmail: config.bootstrapAdminEmail,
     adminPasswordConfigured: Boolean(config.bootstrapAdminPassword),
-    needsSetup: require('./routes/setup').needsSetup(),
+    needsSetup: damaged ? false : require('./routes/setup').needsSetup(),
     dataDir: config.dataDir,
     dbFile: config.dbFile,
+    // Whether the file underneath all of this is sound, and how many copies of
+    // it there are to fall back on. Checked at start-up, not per request.
+    dbHealthy: (maintenance.lastIntegrity() || {}).ok !== false,
+    dbCheckedAt: (maintenance.lastIntegrity() || {}).at || null,
+    backups: maintenance.list().length,
   };
   // ?selftest=1 asks the app to call its own API the way the MCP tools do.
   // When an assistant reports every tool failing, this says whether the app
@@ -106,6 +120,21 @@ app.get('/api/health', async (req, res) => {
   if (req.query.selftest) health.selfTest = await mcp.selfTest(req);
   res.json(health);
 });
+
+// A damaged database is not something to work around request by request:
+// every route below reads or writes it, and writing to it makes the damage
+// worse. Answer with what happened and what fixes it — /api/health above is
+// left reachable, because that is where the detail is.
+if (damaged) {
+  app.use(['/api', '/mcp'], (_req, res) =>
+    res.status(503).json({
+      error:
+        'The database file is damaged, so the app has stopped using it. Nothing has been lost: ' +
+        'restore the most recent backup by setting RESTORE_BACKUP=latest in the hosting panel and ' +
+        'restarting. See /api/health for the details.',
+    })
+  );
+}
 
 // MCP authorization discovery. A client that gets a 401 from /mcp reads these
 // to find out how to ask for access — which is the only route in for a client
@@ -169,10 +198,23 @@ app.use((err, _req, res, _next) => {
 // exists to be backed up from the moment the server comes up.
 require('./crypto').ensureKey();
 
-const credentials = bootstrap();
-const adminApplied = credentials ? null : applyAdminPasswordFromEnv();
-purgeExpiredSessions();
-setInterval(purgeExpiredSessions, 60 * 60 * 1000).unref();
+// Prove the database before writing anything to it, and take a copy while it
+// is known good.
+maintenance.onStart(db);
+setInterval(() => {
+  try {
+    maintenance.backupIfDue(db);
+  } catch (err) {
+    console.error(`[db] scheduled backup failed: ${err.message}`);
+  }
+}, 6 * 3600 * 1000).unref();
+
+const credentials = damaged ? null : bootstrap();
+const adminApplied = credentials || damaged ? null : applyAdminPasswordFromEnv();
+if (!damaged) {
+  purgeExpiredSessions();
+  setInterval(purgeExpiredSessions, 60 * 60 * 1000).unref();
+}
 
 const server = app.listen(config.port, () => {
   require('./self').set(server.address());
@@ -184,7 +226,10 @@ const server = app.listen(config.port, () => {
     console.log(`   Password: ${credentials.password}`);
     console.log('──────────────────────────────────────────────\n');
   }
-  if (require('./routes/setup').needsSetup()) {
+  if (damaged) {
+    console.error(` The site is up but refusing to use the database. ${config.appUrl || ''}/api/health says why.`);
+  }
+  if (!damaged && require('./routes/setup').needsSetup()) {
     console.log('\n──────────────────────────────────────────────');
     console.log(' No administrator yet — open the site to create one.');
     console.log(' Do it now: until you do, the first visitor can claim it.');

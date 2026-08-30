@@ -1249,6 +1249,7 @@
     tab.addEventListener('click', async () => {
       $$('[data-tab]').forEach((t) => t.classList.toggle('active', t === tab));
       $$('.tab-panel').forEach((p) => p.classList.toggle('hidden', p.dataset.panel !== tab.dataset.tab));
+      if (tab.dataset.tab === 'database') loadDatabase();
       if (tab.dataset.tab === 'log') {
         try {
           const { entries } = await api('/api/admin/sent-log');
@@ -1271,6 +1272,82 @@
       }
     })
   );
+
+  // ───────────────────────── Database ─────────────────────────
+  function describeCheck(check) {
+    if (!check) return '<span class="pill">Not checked yet</span>';
+    if (check.ok) {
+      return `<span class="pill ok">Sound</span> <span class="muted">checked ${esc(
+        new Date(check.at).toLocaleString()
+      )}${check.quick ? ', quick check' : ''}</span>`;
+    }
+    return `<span class="pill bad">Damaged</span> <span class="muted">${esc(
+      (check.messages || []).slice(0, 3).join(' · ')
+    )}</span>`;
+  }
+
+  async function loadDatabase() {
+    const status = $('#db-status');
+    try {
+      const info = await api('/api/admin/database');
+      status.innerHTML = `
+        <div>${describeCheck(info.lastCheck)}</div>
+        <div class="muted mono" style="margin-top:6px">${esc(info.file)} · ${bytes(info.bytes)}</div>`;
+
+      $('#db-backups tbody').innerHTML = info.backups.length
+        ? info.backups
+            .map(
+              (b) => `<tr>
+                <td class="mono">${esc(b.name)}</td>
+                <td class="muted">${esc(new Date(b.createdAt).toLocaleString())}</td>
+                <td class="muted">${bytes(b.bytes)}</td>
+                <td><a class="btn btn-ghost btn-small" href="/api/admin/database/backup/${encodeURIComponent(
+                  b.name
+                )}">Download</a></td>
+              </tr>`
+            )
+            .join('')
+        : '<tr><td colspan="4" class="muted" style="padding:20px;text-align:center">No backups yet — one is taken at start-up.</td></tr>';
+    } catch (err) {
+      status.innerHTML = `<span class="pill bad">Unavailable</span> <span class="muted">${esc(err.message)}</span>`;
+    }
+  }
+
+  $('#db-check-btn').addEventListener('click', async (e) => {
+    const button = e.currentTarget;
+    button.disabled = true;
+    showAdminNote('#db-msg', 'Checking every page — this can take a moment…');
+    try {
+      const { result } = await api('/api/admin/database/check', { method: 'POST' });
+      showAdminNote(
+        '#db-msg',
+        result.ok
+          ? 'The database passed a full integrity check.'
+          : `Integrity check failed: ${esc(result.messages.slice(0, 3).join(' · '))}`,
+        !result.ok
+      );
+      $('#db-status').innerHTML = `<div>${describeCheck({ ...result, at: new Date().toISOString() })}</div>`;
+      loadDatabase();
+    } catch (err) {
+      showAdminNote('#db-msg', esc(err.message), true);
+    } finally {
+      button.disabled = false;
+    }
+  });
+
+  $('#db-backup-btn').addEventListener('click', async (e) => {
+    const button = e.currentTarget;
+    button.disabled = true;
+    try {
+      const { backup } = await api('/api/admin/database/backup', { method: 'POST' });
+      showAdminNote('#db-msg', `Backup written: ${esc(backup.name)} (${bytes(backup.bytes)}).`);
+      loadDatabase();
+    } catch (err) {
+      showAdminNote('#db-msg', esc(err.message), true);
+    } finally {
+      button.disabled = false;
+    }
+  });
 
   // Poll the open folder for new mail while the tab is visible.
   setInterval(() => {

@@ -13,6 +13,7 @@
  */
 
 const fs = require('fs');
+const os = require('os');
 const { Database: WasmDatabase } = require('node-sqlite3-wasm');
 
 // The WASM driver takes its write lock by creating a `<db>.lock` directory and
@@ -23,6 +24,10 @@ const { Database: WasmDatabase } = require('node-sqlite3-wasm');
 // same way SQLite recovers a hot journal: if nothing alive owns the lock,
 // clear it.
 const STALE_LOCK_MS = 30_000;
+// A lock belonging to another machine cannot be judged by whether its pid is
+// alive here — pids are per-container, and two of them will collide sooner or
+// later. Give a foreign lock long enough that a real writer is never cut off.
+const FOREIGN_LOCK_MS = 5 * 60_000;
 
 function processAlive(pid) {
   try {
@@ -33,18 +38,30 @@ function processAlive(pid) {
   }
 }
 
+/** `<host>:<pid>`, so a lock can be told apart from one taken elsewhere. */
+function ownerId() {
+  return `${os.hostname()}:${process.pid}`;
+}
+
+function readOwner(file) {
+  try {
+    const raw = fs.readFileSync(`${file}.owner`, 'utf8').trim();
+    const [host, pid] = raw.includes(':') ? raw.split(':') : [null, raw];
+    return { host, pid: Number(pid) || null, raw };
+  } catch {
+    return { host: null, pid: null, raw: '' }; // predates this, or the writer died early
+  }
+}
+
+/** Returns true when the lock belongs to another machine and was left alone. */
 function clearStaleLock(file) {
   const lockDir = `${file}.lock`;
-  if (!fs.existsSync(lockDir)) return;
+  if (!fs.existsSync(lockDir)) return false;
 
-  let owner = null;
-  try {
-    owner = Number(fs.readFileSync(`${file}.owner`, 'utf8').trim()) || null;
-  } catch {
-    /* no owner recorded — predates this check, or the writer died early */
-  }
+  const owner = readOwner(file);
+  const foreign = owner.host && owner.host !== os.hostname();
+  const heldByLiveProcess = !foreign && owner.pid && owner.pid !== process.pid && processAlive(owner.pid);
 
-  const heldByLiveProcess = owner && owner !== process.pid && processAlive(owner);
   let age = Infinity;
   try {
     age = Date.now() - fs.statSync(lockDir).mtimeMs;
@@ -52,14 +69,26 @@ function clearStaleLock(file) {
     /* vanished underneath us */
   }
 
-  if (heldByLiveProcess && age < STALE_LOCK_MS) return; // genuinely in use
+  if (heldByLiveProcess && age < STALE_LOCK_MS) return false; // genuinely in use
+  if (foreign && age < FOREIGN_LOCK_MS) {
+    // Two copies of the app sharing one database file is how a SQLite file
+    // gets corrupted. Say so plainly — it is not something to work around.
+    console.error(
+      `[db] the write lock is held by another machine (${owner.raw}). ` +
+        'Two instances must not share one database file — run one, or give each its own DATA_DIR.'
+    );
+    return true; // someone else's lock: leave it, and do not claim ownership
+  }
 
   try {
     fs.rmSync(lockDir, { recursive: true, force: true });
-    console.log(`[db] cleared a stale lock left by a previous run (${lockDir})`);
+    console.log(
+      `[db] cleared a stale lock left by ${owner.raw || 'a previous run'} (${lockDir})`
+    );
   } catch (err) {
     console.error(`[db] could not clear stale lock ${lockDir}: ${err.message}`);
   }
+  return false;
 }
 
 /**
@@ -124,14 +153,19 @@ class Statement {
 
 class Database {
   constructor(file) {
-    clearStaleLock(file);
+    const heldElsewhere = clearStaleLock(file);
     this._file = file;
     this._raw = new WasmDatabase(file);
     this._statements = new Map();
-    try {
-      fs.writeFileSync(`${file}.owner`, String(process.pid), { mode: 0o600 });
-    } catch {
-      /* advisory only — a missing owner file just means locks look stale */
+    // Claiming ownership over a lock another machine is holding would let the
+    // next start mistake it for ours and clear it — which is the very thing
+    // that corrupts the file.
+    if (!heldElsewhere) {
+      try {
+        fs.writeFileSync(`${file}.owner`, ownerId(), { mode: 0o600 });
+      } catch {
+        /* advisory only — a missing owner file just means locks look stale */
+      }
     }
   }
 
@@ -147,6 +181,25 @@ class Database {
 
   _forget(sql) {
     this._statements.delete(sql);
+  }
+
+  /**
+   * Drop every cached statement.
+   *
+   * SQLite refuses to VACUUM while any statement is live, and this wrapper
+   * deliberately keeps them alive — the callers re-prepare the same SQL
+   * constantly. They are rebuilt on the next prepare(), so the only cost of
+   * letting them go is one re-compile each.
+   */
+  finalizeAll() {
+    for (const stmt of this._statements.values()) {
+      try {
+        stmt._stmt.finalize();
+      } catch {
+        /* already finalised */
+      }
+    }
+    this._statements.clear();
   }
 
   exec(sql) {
@@ -188,14 +241,7 @@ class Database {
   }
 
   close() {
-    for (const stmt of this._statements.values()) {
-      try {
-        stmt._stmt.finalize();
-      } catch {
-        /* ignore */
-      }
-    }
-    this._statements.clear();
+    this.finalizeAll();
     this._raw.close();
     try {
       fs.rmSync(`${this._file}.owner`, { force: true });

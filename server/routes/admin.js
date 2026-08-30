@@ -2,8 +2,11 @@
 
 const express = require('express');
 const crypto = require('crypto');
+const fs = require('fs');
+const path = require('path');
 
-const { db } = require('../db');
+const config = require('../config');
+const { db, maintenance } = require('../db');
 const auth = require('../auth');
 const { encrypt } = require('../crypto');
 const mailboxStore = require('../mail/mailboxes');
@@ -336,6 +339,47 @@ router.post('/mailboxes/test', async (req, res) => {
 // ---------------------------------------------------------------------------
 // Sent-mail audit trail
 // ---------------------------------------------------------------------------
+// ---------------------------------------------------------------------------
+// The database file: is it sound, and what is there to fall back on.
+// ---------------------------------------------------------------------------
+router.get('/database', (_req, res) => {
+  let bytes = 0;
+  try {
+    bytes = fs.statSync(config.dbFile).size;
+  } catch {
+    /* reported as zero */
+  }
+  res.json({
+    file: config.dbFile,
+    bytes,
+    lastCheck: maintenance.lastIntegrity(),
+    backups: maintenance.list(),
+    backupDir: maintenance.BACKUP_DIR,
+  });
+});
+
+/** The full check, on demand — slower than the one taken at start-up. */
+router.post('/database/check', (_req, res) => {
+  res.json({ result: maintenance.integrity(db) });
+});
+
+router.post('/database/backup', (_req, res) => {
+  try {
+    res.status(201).json({ backup: maintenance.backup(db, { reason: 'requested by an administrator' }) });
+  } catch (err) {
+    res.status(500).json({ error: `Could not write a backup: ${err.message}` });
+  }
+});
+
+// Downloading is the only way to get a copy off a host with no shell — which
+// is the position this app is usually deployed into.
+router.get('/database/backup/:name', (req, res) => {
+  const name = path.basename(String(req.params.name || ''));
+  const known = maintenance.list().some((b) => b.name === name);
+  if (!known) return res.status(404).json({ error: 'No such backup' });
+  res.download(path.join(maintenance.BACKUP_DIR, name), name);
+});
+
 router.get('/sent-log', (req, res) => {
   const limit = Math.min(Number(req.query.limit) || 100, 500);
   const rows = db
