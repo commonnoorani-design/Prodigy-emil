@@ -37,7 +37,7 @@
     "express": "^5.2.1",
     "express-rate-limit": "^8.6.2",
     "imapflow": "^1.6.5",
-    "mailparser": "^3.9.14",
+    "mailparser": "^3.9.17",
     "multer": "^2.2.0",
     "node-sqlite3-wasm": "^0.8.45",
     "nodemailer": "^9.0.4",
