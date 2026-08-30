@@ -21,13 +21,20 @@ let db = new Database(config.dbFile);
 // first, and if it fails, carry on far enough to report it.
 let startupCheck = maintenance.record(maintenance.integrity(db, { quick: true }));
 
-// A broken index is not lost data. Given REPAIR_DB, try to put the file right
-// before falling back to a backup, which costs everything written since.
-if (!startupCheck.ok && maintenance.repairRequested()) {
-  db.close();
-  maintenance.recordRepair(maintenance.repair(Database));
-  db = new Database(config.dbFile);
-  startupCheck = maintenance.record(maintenance.integrity(db, { quick: true }));
+// A broken index is not lost data. When that is the *only* thing wrong, fix it
+// without being asked: rebuilding an index cannot lose a row, and an app that
+// takes itself down until somebody notices is worse than one that mends the
+// thing it can prove is mendable. Anything deeper waits for REPAIR_DB, since
+// the steps behind it rewrite the file.
+if (!startupCheck.ok) {
+  const asked = maintenance.repairRequested();
+  const routine = !asked && maintenance.indexOnly(startupCheck.messages);
+  if (asked || routine) {
+    db.close();
+    maintenance.recordRepair(maintenance.repair(Database, { indexesOnly: routine }));
+    db = new Database(config.dbFile);
+    startupCheck = maintenance.record(maintenance.integrity(db, { quick: true }));
+  }
 }
 
 const damaged = startupCheck.ok ? null : startupCheck;

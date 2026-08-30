@@ -188,6 +188,38 @@ function restoreIfRequested() {
  */
 const REPAIR_MARKER = path.join(BACKUP_DIR, '.repaired');
 
+// The complaints SQLite makes when an index has drifted out of step with the
+// table it indexes. The rows are all present and readable; only the structure
+// over them is wrong, and REINDEX rebuilds that from the rows themselves.
+const INDEX_ONLY = [
+  /^wrong # of entries in index /,
+  /^row \d+ missing from index /,
+  /^non-unique entry in index /,
+  /^NULL value in \S+ but no index entry/,
+  // Free-space accounting on a page being a few bytes out. Benign on its own,
+  // and it comes along with the index complaints above often enough to be
+  // worth allowing beside them.
+  /^Fragmentation of \d+ bytes reported as \d+ on page \d+/,
+];
+
+/**
+ * Is every complaint about an index, and nothing about the data?
+ *
+ * Worth asking, because that case is safe to put right without being told to:
+ * rebuilding an index cannot lose a row, and leaving the app down overnight
+ * waiting for someone to set a variable costs more than the repair does.
+ */
+function indexOnly(messages = []) {
+  // A single message can carry several lines — the "*** in database main ***"
+  // banner arrives glued to the first complaint. Judge line by line, or a real
+  // fault hides behind a banner.
+  const lines = messages
+    .flatMap((m) => String(m || '').split('\n'))
+    .map((line) => line.trim())
+    .filter((line) => line && !/^\*\*\* in database /.test(line));
+  return lines.length > 0 && lines.every((line) => INDEX_ONLY.some((pattern) => pattern.test(line)));
+}
+
 function repairRequested() {
   const wanted = String(process.env.REPAIR_DB || '').trim();
   if (!wanted || wanted === '0' || wanted.toLowerCase() === 'false') return false;
@@ -328,7 +360,7 @@ function salvage(Database, notes) {
   }
 }
 
-function repair(Database) {
+function repair(Database, { indexesOnly = false } = {}) {
   ensureDir();
   const notes = [];
   const kept = path.join(BACKUP_DIR, `before-repair-${stamp()}.db`);
@@ -356,10 +388,18 @@ function repair(Database) {
   });
   if (reindexed) {
     notes.push('rebuilding the indexes was enough — no rows were lost');
-    markRepaired();
+    if (!indexesOnly) markRepaired();
     return { ok: true, method: 'reindex', notes };
   }
   notes.push('rebuilding the indexes did not fix it');
+
+  // Everything past here rewrites or replaces the file. That is a fair trade
+  // for a database somebody has asked to have repaired, and too much to do
+  // uninvited to one whose only fault looked like a stale index.
+  if (indexesOnly) {
+    notes.push('leaving the rest alone — set REPAIR_DB=1 to go further');
+    return { ok: false, method: 'reindex', notes };
+  }
 
   // 2. Rewrite the file from its own contents.
   const rebuilt = attempt('rewriting the file', () => {
@@ -462,6 +502,7 @@ module.exports = {
   repair,
   repairRequested,
   recordRepair,
+  indexOnly,
   lastRepair: () => lastRepair,
   backupIfDue,
   integrity,

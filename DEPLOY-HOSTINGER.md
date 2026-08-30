@@ -157,7 +157,13 @@ file at every start, and if the check fails it comes up refusing to use it —
 `/api/health` reports `"dbHealthy": false`, everything else answers 503, and
 nothing is written.
 
-**First, try to repair it — that usually costs nothing.** In hPanel →
+**A broken index mends itself.** If `dbCheck` says only *"wrong # of entries in
+index …"* or *"row N missing from index …"*, the rows are all still there and
+the app rebuilds those indexes on its next start without being asked — nothing
+is lost, and `dbRepair` in `/api/health` reports what it did. Just restart it.
+
+**For anything deeper, ask for a repair — that usually costs nothing either.**
+In hPanel →
 *Settings & Redeploy* → *Environment variables*:
 
 ```
